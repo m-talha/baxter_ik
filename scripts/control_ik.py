@@ -234,126 +234,13 @@ def delete_gazebo_models():
     except rospy.ServiceException, e:
         rospy.loginfo("Delete Model service call failed: {0}".format(e))
 
-def map_joystick(joystick,group,kin):
-    """
-    Maps joystick input to joint position commands.
-
-    @param joystick: an instance of a Joystick
-    """
-
-    rcmd = {}
-    changed = False
-    delta = 0.01
-    d_theta = 5
-    ori = 'False'
-    rate = rospy.Rate(100)
-    waypoints = []
-    joints = ['left_w0','left_w1','left_w2','left_e0','left_e1','left_s0','left_s1']
-    ik_pose = group.get_current_pose().pose
-    print("Press Ctrl-C to stop. ")
-    while not rospy.is_shutdown():
-        group.set_start_state_to_current_state()
-        pos = [0.582583, -0.180819, 0.216003]
-
-        # waypoints.append(copy.deepcopy(ik_pose))
-        print "Before: /n", ik_pose
-        # ik_pose.orientation.w = 1
-
-        angles = transformations.euler_from_quaternion(ik_pose.orientation.__getstate__())
-
-        if joystick.button_down('leftBumper'):
-            ori = True
-        elif joystick.button_up('leftBumper'):
-            ori = False
-
-        if joystick.button_down('rightTrigger'):
-            pnp._gripper.close()
-        elif joystick.button_up('rightTrigger'):
-            pnp._gripper.open()
-
-        x,y,z=angles[0],angles[1],angles[2]
-        if joystick.stick_value('leftStickVert') > 0:
-            print 'changed'
-            changed = True
-            if ori == True:
-                y = y + d_theta*math.pi/180
-            else:
-                ik_pose.position.x = ik_pose.position.x + delta
-        elif joystick.stick_value('leftStickVert') < 0:
-            changed = True
-            if ori == True:
-                y = y - d_theta*math.pi/180
-            else:
-                ik_pose.position.x = ik_pose.position.x - delta
-        if joystick.stick_value('leftStickHorz') > 0:
-            changed = True
-            if ori == True:
-                x = x + d_theta*math.pi/180
-            else:
-                ik_pose.position.y = ik_pose.position.y + delta
-        elif joystick.stick_value('leftStickHorz') < 0:
-            changed = True
-            if ori == True:
-                x = x - d_theta*math.pi/180
-            else:
-                ik_pose.position.y = ik_pose.position.y - delta
-        if joystick.stick_value('rightStickVert') > 0:
-            changed = True
-            ik_pose.position.z = ik_pose.position.z + delta
-        elif joystick.stick_value('rightStickVert') < 0:
-            changed = True
-            ik_pose.position.z = ik_pose.position.z - delta
-        if joystick.stick_value('rightStickHorz') > 0:
-            changed = True
-            if ori == True:
-                z = z + d_theta*math.pi/180
-        elif joystick.stick_value('rightStickHorz') < 0:
-            changed = True
-            if ori == True:
-                z = z - d_theta*math.pi/180
-
-        if ori==True:
-            ik_pose.orientation.__setstate__(transformations.quaternion_from_euler(x,y,z))
-
-        print "After: /n", ik_pose
-
-        pos = [ik_pose.position.x,ik_pose.position.y,ik_pose.position.z]
-        pos = [0.582583, -0.180819, 0.216003]
-        ori = [ik_pose.orientation.x,ik_pose.orientation.y,ik_pose.orientation.z, ik_pose.orientation.w]
-
-        if changed:
-            if ori==True:
-                angles = kin.inverse_kinematics(pos,oril)
-            else:
-                angles = kin.inverse_kinematics(pos)
-            print 'Angles: ',angles
-            if not angles == None:
-                limb_joints = dict(zip(joints, angles))
-                try:
-                    group.set_joint_value_target(limb_joints)
-                except MoveItCommanderException:
-                    print'Unreachable position. Aborting'
-                    continue
-                group.go()
-
-        # if changed:
-        #     waypoints.append(copy.deepcopy(ik_pose))
-        #     (plan3, fraction) = group.compute_cartesian_path(
-        #                              waypoints,   # waypoints to follow
-        #                              0.01,        # eef_step
-        #                              0.0)         # jump_threshold
-        #     group.execute(plan3)
-        #     changed = False
-
-        # group.set_pose_target(ik_pose,end_effector_link='left_gripper_base')
-        # group.go(ik_pose, wait=False)
+def world_to_hand(pose,delta):
+    R = transformations.quaternion_matrix(pose['orientation'])
+    R_inv = transformations.inverse_matrix(R)
+    print R_inv[0:3, 0:3]
 
 
-        rate.sleep()
-
-    return False
-
-def map_joystick_pnp(joystick,pnp):
+def map_joystick(joystick,pnp):
     """
     Maps joystick input to joint position commands.
 
@@ -471,7 +358,7 @@ def main():
     can improve on this demo by adding perception and feedback to close
     the loop.
     """
-    # rospy.init_node("ik_pick_and_place_demo")
+
     print("Initializing node... ")
     rospy.init_node("cartesian_control")
     print 'Initialised'
@@ -483,14 +370,14 @@ def main():
     # rospy.on_shutdown(delete_gazebo_models)
 
     # Wait for the All Clear from emulator startup
-    # rospy.wait_for_message("/robot/sim/started", Empty)
+    rospy.wait_for_message("/robot/sim/started", Empty)
 
-    # print("Getting robot state... ")
-    # rs = baxter_interface.RobotEnable(baxter_interface.CHECK_VERSION)
-    # init_state = rs.state().enabled
-    #
-    # print("Enabling robot... ")
-    # rs.enable()
+    print("Getting robot state... ")
+    rs = baxter_interface.RobotEnable(baxter_interface.CHECK_VERSION)
+    init_state = rs.state().enabled
+
+    print("Enabling robot... ")
+    rs.enable()
 
     limb = 'left'
     hover_distance = 0.15 # meters
@@ -520,7 +407,7 @@ def main():
     pnp.move_to_start(starting_joint_angles)
 
     joystick = baxter_external_devices.joystick.XboxController()
-    map_joystick(joystick, group, kin)
+    map_joystick(joystick, pnp)
     print("Done.")
 
     return 0
