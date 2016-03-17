@@ -70,6 +70,19 @@ import moveit_msgs.msg
 from baxter_pykdl import baxter_kinematics
 from moveit_commander.exception import MoveItCommanderException
 
+try:
+    import vrep
+    import vrepConst
+    from vrep_common.srv import *
+except:
+    print ('--------------------------------------------------------------')
+    print ('"vrep.py" could not be imported. This means very probably that')
+    print ('either "vrep.py" or the remoteApi library could not be found.')
+    print ('Make sure both are in the same folder as this file,')
+    print ('or appropriately adjust the file "vrep.py"')
+    print ('--------------------------------------------------------------')
+    print ('')
+
 class PickAndPlace(object):
     def __init__(self, limb, hover_distance = 0.15, verbose=True):
         self._limb_name = limb # string
@@ -515,12 +528,78 @@ def main():
                              y=0.999649402929,
                              z=0.00737916180073,
                              w=0.00486450832011)
+    num=0
+    jntSvc = rospy.ServiceProxy('/vrep/simRosGetObjectGroupData',simRosGetObjectGroupData)
+    resp = jntSvc.call(vrepConst.sim_object_joint_type,0)
+    assert isinstance(resp, simRosGetObjectGroupDataResponse)
+    # assert isinstance(resp, simRosGetObjectHandleResponse)
+    print resp
 
-    pnp = PickAndPlace(limb, hover_distance,verbose=False)
-    pnp.move_to_start(starting_joint_angles)
 
-    joystick = baxter_external_devices.joystick.XboxController()
-    map_joystick(joystick, group, kin)
+    # pnp = PickAndPlace(limb, hover_distance,verbose=False)
+    # pnp.move_to_start(starting_joint_angles)
+
+    # print"Initialising MoveIt..."
+    # moveit_commander.roscpp_initialize(sys.argv)
+    # robot = moveit_commander.RobotCommander()
+    # scene = moveit_commander.PlanningSceneInterface()
+    # group = moveit_commander.MoveGroupCommander('left_arm')
+    # # group.set_planner_id("ESTkConfigDefault")
+    # group.set_joint_value_target(starting_joint_angles)
+    # group.go()
+    # print group.get_current_pose().pose
+    # # 0.908952, 1.103975, 0.320976
+    # pos = [0.582583, -0.180819, 0.216003]
+    # rot = [0.03085, 0.9945, 0.0561, 0.0829]
+    # limb = baxter_interface.Limb('left')
+    # kin = baxter_kinematics('left')
+    # print ''
+    # angles = kin.inverse_kinematics(pos,rot)
+    # print 'Angles: ',angles
+    #
+    #
+    # limb_joints = dict(zip(joints, angles))
+    # limb.move_to_joint_positions(limb_joints)
+    # group.set_joint_value_target(limb_joints)
+    # group.go()
+
+    #
+    # print "Initialisation finished."
+    #
+    # waypoints = []
+
+    # start with the current pose
+    # waypoints.append(group.get_current_pose().pose)
+    # print(group.get_current_pose().pose)
+    # # first orient gripper and move forward (+x)
+    # wpose = Pose()
+    # wpose.orientation.w = 1.0
+    # wpose.position.x = waypoints[0].position.x + 0.1
+    # wpose.position.y = waypoints[0].position.y
+    # wpose.position.z = waypoints[0].position.z
+    # waypoints.append(copy.deepcopy(wpose))
+    #
+    # # second move down
+    # wpose.position.z -= 0.1
+    # waypoints.append(copy.deepcopy(wpose))
+    #
+    # # third move to the side
+    # wpose.position.y += 0.1
+    # waypoints.append(copy.deepcopy(wpose))
+    #
+    # (plan3, fraction) = group.compute_cartesian_path(
+    #                              waypoints,   # waypoints to follow
+    #                              0.01,        # eef_step
+    #                              0.0)         # jump_threshold
+    # group.execute(plan3)
+    # print(group.get_current_pose().pose)
+    # print "============ Waiting while RVIZ displays plan3..."
+    # rospy.sleep(20)
+
+
+    # joystick = baxter_external_devices.joystick.XboxController()
+    #
+    # map_joystick(joystick, group, kin)
     print("Done.")
 
     return 0
