@@ -67,7 +67,6 @@ import baxter_external_devices
 import moveit_commander
 import moveit_msgs.msg
 
-from baxter_pykdl import baxter_kinematics
 from moveit_commander.exception import MoveItCommanderException
 
 class PickAndPlace(object):
@@ -234,7 +233,7 @@ def delete_gazebo_models():
     except rospy.ServiceException, e:
         rospy.loginfo("Delete Model service call failed: {0}".format(e))
 
-def map_joystick(joystick,group,kin):
+def map_joystick(joystick,group):
     """
     Maps joystick input to joint position commands.
 
@@ -250,6 +249,7 @@ def map_joystick(joystick,group,kin):
     waypoints = []
     joints = ['left_w0','left_w1','left_w2','left_e0','left_e1','left_s0','left_s1']
     ik_pose = group.get_current_pose().pose
+
     print("Press Ctrl-C to stop. ")
     while not rospy.is_shutdown():
         group.set_start_state_to_current_state()
@@ -317,25 +317,6 @@ def map_joystick(joystick,group,kin):
 
         print "After: /n", ik_pose
 
-        pos = [ik_pose.position.x,ik_pose.position.y,ik_pose.position.z]
-        pos = [0.582583, -0.180819, 0.216003]
-        ori = [ik_pose.orientation.x,ik_pose.orientation.y,ik_pose.orientation.z, ik_pose.orientation.w]
-
-        if changed:
-            if ori==True:
-                angles = kin.inverse_kinematics(pos,oril)
-            else:
-                angles = kin.inverse_kinematics(pos)
-            print 'Angles: ',angles
-            if not angles == None:
-                limb_joints = dict(zip(joints, angles))
-                try:
-                    group.set_joint_value_target(limb_joints)
-                except MoveItCommanderException:
-                    print'Unreachable position. Aborting'
-                    continue
-                group.go()
-
         # if changed:
         #     waypoints.append(copy.deepcopy(ik_pose))
         #     (plan3, fraction) = group.compute_cartesian_path(
@@ -345,116 +326,11 @@ def map_joystick(joystick,group,kin):
         #     group.execute(plan3)
         #     changed = False
 
-        # group.set_pose_target(ik_pose,end_effector_link='left_gripper_base')
-        # group.go(ik_pose, wait=False)
-
+        group.set_pose_target(ik_pose,end_effector_link='left_gripper_base')
+        group.go(ik_pose, wait=False)
 
         rate.sleep()
 
-    return False
-
-def map_joystick_pnp(joystick,pnp):
-    """
-    Maps joystick input to joint position commands.
-
-    @param joystick: an instance of a Joystick
-    """
-    # right = baxter_interface.Limb('right')
-    # grip_right = baxter_interface.Gripper('right', baxter_interface.CHECK_VERSION)
-    rcmd = {}
-    changed = False
-    delta = 0.01
-    d_theta = 5
-    ori = 'False'
-    rate = rospy.Rate(100)
-
-    print("Press Ctrl-C to stop. ")
-    while not rospy.is_shutdown():
-        current_pose = pnp._limb.endpoint_pose()
-        ik_pose = Pose()
-
-        ik_pose.position.x = current_pose['position'].x
-        ik_pose.position.y = current_pose['position'].y
-        ik_pose.position.z = current_pose['position'].z
-        ik_pose.orientation.x = current_pose['orientation'].x
-        ik_pose.orientation.y = current_pose['orientation'].y
-        ik_pose.orientation.z = current_pose['orientation'].z
-        ik_pose.orientation.w = current_pose['orientation'].w
-        angles = transformations.euler_from_quaternion(ik_pose.orientation.__getstate__())
-
-        if joystick.button_down('leftBumper'):
-            ori = True
-        elif joystick.button_up('leftBumper'):
-            ori = False
-
-        if joystick.button_down('rightTrigger'):
-            pnp._gripper.close()
-        elif joystick.button_up('rightTrigger'):
-            pnp._gripper.open()
-
-        x,y,z=angles[0],angles[1],angles[2]
-        if joystick.stick_value('leftStickVert') > 0:
-            changed = True
-            if ori == True:
-                y = y + d_theta*math.pi/180
-            else:
-                ik_pose.position.x = current_pose['position'].x + delta
-        elif joystick.stick_value('leftStickVert') < 0:
-            changed = True
-            if ori == True:
-                y = y - d_theta*math.pi/180
-            else:
-                ik_pose.position.x = current_pose['position'].x - delta
-        if joystick.stick_value('leftStickHorz') > 0:
-            changed = True
-            if ori == True:
-                x = x + d_theta*math.pi/180
-            else:
-                ik_pose.position.y = current_pose['position'].y + delta
-        elif joystick.stick_value('leftStickHorz') < 0:
-            changed = True
-            if ori == True:
-                x = x - d_theta*math.pi/180
-            else:
-                ik_pose.position.y = current_pose['position'].y - delta
-        if joystick.stick_value('rightStickVert') > 0:
-            changed = True
-            ik_pose.position.z = current_pose['position'].z + delta
-        elif joystick.stick_value('rightStickVert') < 0:
-            changed = True
-            ik_pose.position.z = current_pose['position'].z - delta
-        if joystick.stick_value('rightStickHorz') > 0:
-            changed = True
-            if ori == True:
-                z = z + d_theta*math.pi/180
-        elif joystick.stick_value('rightStickHorz') < 0:
-            changed = True
-            if ori == True:
-                z = z - d_theta*math.pi/180
-
-        if ori:
-            ik_pose.orientation.__setstate__(transformations.quaternion_from_euler(x,y,z))
-
-        # print('Calculating joint positions')
-        if changed == True:
-            rcmd = pnp.ik_request(ik_pose)
-        # print('Calculation done')
-
-        if rcmd:
-            # print('rcmd: {0}'.format(rcmd))
-            # print('current_pose: {0}'.format(current_pose))
-            # print('ik_pose: {0}'.format(ik_pose))
-            # print('Setting joint positions')
-            new = False
-            # for k,v in rcmd.items():
-                # if abs(v-)
-            #     print('New position')
-            if changed == True:
-                pnp._limb.set_joint_positions(rcmd)
-            # pnp._guarded_move_to_joint_position(rcmd)
-            rcmd.clear()
-            changed = False
-        rate.sleep()
     return False
 
 def main():
@@ -471,7 +347,7 @@ def main():
     can improve on this demo by adding perception and feedback to close
     the loop.
     """
-    # rospy.init_node("ik_pick_and_place_demo")
+
     print("Initializing node... ")
     rospy.init_node("cartesian_control")
     print 'Initialised'
@@ -483,14 +359,14 @@ def main():
     # rospy.on_shutdown(delete_gazebo_models)
 
     # Wait for the All Clear from emulator startup
-    # rospy.wait_for_message("/robot/sim/started", Empty)
+    rospy.wait_for_message("/robot/sim/started", Empty)
 
     # print("Getting robot state... ")
-    # rs = baxter_interface.RobotEnable(baxter_interface.CHECK_VERSION)
-    # init_state = rs.state().enabled
-    #
-    # print("Enabling robot... ")
-    # rs.enable()
+    rs = baxter_interface.RobotEnable(baxter_interface.CHECK_VERSION)
+    init_state = rs.state().enabled
+
+    print("Enabling robot... ")
+    rs.enable()
 
     limb = 'left'
     hover_distance = 0.15 # meters
@@ -516,11 +392,52 @@ def main():
                              z=0.00737916180073,
                              w=0.00486450832011)
 
-    pnp = PickAndPlace(limb, hover_distance,verbose=False)
-    pnp.move_to_start(starting_joint_angles)
+    print"Initialising MoveIt..."
+    moveit_commander.roscpp_initialize(sys.argv)
+    robot = moveit_commander.RobotCommander()
+    scene = moveit_commander.PlanningSceneInterface()
+    group = moveit_commander.MoveGroupCommander('left_arm')
+    # # group.set_planner_id("ESTkConfigDefault")
+    group.set_joint_value_target(starting_joint_angles)
+    group.go()
+    # print group.get_current_pose().pose
+
+    #
+    # print "Initialisation finished."
+    #
+    # waypoints = []
+
+    # start with the current pose
+    # waypoints.append(group.get_current_pose().pose)
+    # print(group.get_current_pose().pose)
+    # # first orient gripper and move forward (+x)
+    # wpose = Pose()
+    # wpose.orientation.w = 1.0
+    # wpose.position.x = waypoints[0].position.x + 0.1
+    # wpose.position.y = waypoints[0].position.y
+    # wpose.position.z = waypoints[0].position.z
+    # waypoints.append(copy.deepcopy(wpose))
+    #
+    # # second move down
+    # wpose.position.z -= 0.1
+    # waypoints.append(copy.deepcopy(wpose))
+    #
+    # # third move to the side
+    # wpose.position.y += 0.1
+    # waypoints.append(copy.deepcopy(wpose))
+    #
+    # (plan3, fraction) = group.compute_cartesian_path(
+    #                              waypoints,   # waypoints to follow
+    #                              0.01,        # eef_step
+    #                              0.0)         # jump_threshold
+    # group.execute(plan3)
+    # print(group.get_current_pose().pose)
+    # print "============ Waiting while RVIZ displays plan3..."
+    # rospy.sleep(20)
 
     joystick = baxter_external_devices.joystick.XboxController()
-    map_joystick(joystick, group, kin)
+
+    map_joystick(joystick, group)
     print("Done.")
 
     return 0

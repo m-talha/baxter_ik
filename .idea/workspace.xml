@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="ae985be4-277a-43ea-ab5c-c1f5b37d69bd" name="Default" comment="" />
+    <list default="true" id="ae985be4-277a-43ea-ab5c-c1f5b37d69bd" name="Default" comment="">
+      <change type="DELETED" beforePath="$PROJECT_DIR$/scripts/control_ik_vrep.py" afterPath="" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/scripts/control_ik.py" afterPath="$PROJECT_DIR$/scripts/control_ik.py" />
+    </list>
     <ignored path="baxter_ik.iws" />
     <ignored path=".idea/workspace.xml" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -24,24 +28,12 @@
       <file leaf-file-name="control_ik.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/scripts/control_ik.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.42857143">
-              <caret line="519" column="44" selection-start-line="519" selection-start-column="44" selection-end-line="519" selection-end-column="44" />
+            <state vertical-scroll-proportion="2.4285715">
+              <caret line="68" column="0" selection-start-line="68" selection-start-column="0" selection-end-line="68" selection-end-column="0" />
               <folding>
-                <element signature="e#1636#1651#0" expanded="true" />
-                <element signature="e#7503#8670#0" expanded="false" />
-                <element signature="e#8704#9246#0" expanded="false" />
-                <element signature="e#13503#17300#0" expanded="false" />
+                <element signature="e#7460#8627#0" expanded="false" />
+                <element signature="e#8661#9203#0" expanded="false" />
               </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="control_ik_vrep.py" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/scripts/control_ik_vrep.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.0">
-              <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-              <folding />
             </state>
           </provider>
         </entry>
@@ -118,6 +110,9 @@
       </file>
     </leaf>
   </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
   <component name="HighlightingSettingsPerFile">
     <setting file="file://$PROJECT_DIR$/scripts/control_ik.py" root0="SKIP_INSPECTION" />
   </component>
@@ -132,7 +127,7 @@
     <option name="width" value="724" />
     <option name="height" value="887" />
   </component>
-  <component name="ProjectLevelVcsManager" settingsEditedManually="false">
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true">
     <OptionsSetting value="true" id="Add" />
     <OptionsSetting value="true" id="Remove" />
     <OptionsSetting value="true" id="Checkout" />
@@ -159,9 +154,25 @@
     <panes />
   </component>
   <component name="PropertiesComponent">
-    <property name="settings.editor.selected.configurable" value="com.jetbrains.python.buildout.BuildoutModulesConfigurable" />
+    <property name="settings.editor.selected.configurable" value="project.propVCSSupport.Mappings" />
     <property name="settings.editor.splitter.proportion" value="0.2" />
     <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+    <property name="FileHistory.git4idea.history.GitHistoryProvider_flatWidth0" value="47" />
+    <property name="FileHistory.git4idea.history.GitHistoryProvider_flatOrder0" value="0" />
+    <property name="FileHistory.git4idea.history.GitHistoryProvider_flatWidth1" value="52" />
+    <property name="FileHistory.git4idea.history.GitHistoryProvider_flatOrder1" value="1" />
+    <property name="FileHistory.git4idea.history.GitHistoryProvider_flatWidth2" value="55" />
+    <property name="FileHistory.git4idea.history.GitHistoryProvider_flatOrder2" value="2" />
+    <property name="FileHistory.git4idea.history.GitHistoryProvider_flatWidth3" value="536" />
+    <property name="FileHistory.git4idea.history.GitHistoryProvider_flatOrder3" value="3" />
+    <property name="FileHistory.git4idea.history.GitHistoryProvider_treeWidth0" value="47" />
+    <property name="FileHistory.git4idea.history.GitHistoryProvider_treeOrder0" value="0" />
+    <property name="FileHistory.git4idea.history.GitHistoryProvider_treeWidth1" value="52" />
+    <property name="FileHistory.git4idea.history.GitHistoryProvider_treeOrder1" value="1" />
+    <property name="FileHistory.git4idea.history.GitHistoryProvider_treeWidth2" value="55" />
+    <property name="FileHistory.git4idea.history.GitHistoryProvider_treeOrder2" value="2" />
+    <property name="FileHistory.git4idea.history.GitHistoryProvider_treeWidth3" value="536" />
+    <property name="FileHistory.git4idea.history.GitHistoryProvider_treeOrder3" value="3" />
   </component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
@@ -343,7 +354,7 @@
       <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.32869786" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Favorites" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="true" content_ui="tabs" />
       <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32996207" sideWeight="0.5" order="8" side_tool="true" content_ui="tabs" />
-      <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="9" side_tool="false" content_ui="tabs" />
+      <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32996207" sideWeight="0.5" order="9" side_tool="false" content_ui="tabs" />
       <window_info id="Cvs" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="4" side_tool="false" content_ui="tabs" />
       <window_info id="Message" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
       <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
@@ -410,10 +421,8 @@
         <state vertical-scroll-proportion="0.0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
-            <element signature="e#1636#1651#0" expanded="true" />
-            <element signature="e#7503#8670#0" expanded="false" />
-            <element signature="e#8704#9246#0" expanded="false" />
-            <element signature="e#13503#17300#0" expanded="false" />
+            <element signature="e#7460#8627#0" expanded="false" />
+            <element signature="e#8661#9203#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -463,10 +472,8 @@
         <state vertical-scroll-proportion="0.0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
-            <element signature="e#1636#1651#0" expanded="true" />
-            <element signature="e#7503#8670#0" expanded="false" />
-            <element signature="e#8704#9246#0" expanded="false" />
-            <element signature="e#13503#17300#0" expanded="false" />
+            <element signature="e#7460#8627#0" expanded="false" />
+            <element signature="e#8661#9203#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -507,10 +514,8 @@
         <state vertical-scroll-proportion="0.0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
-            <element signature="e#1636#1651#0" expanded="true" />
-            <element signature="e#7503#8670#0" expanded="false" />
-            <element signature="e#8704#9246#0" expanded="false" />
-            <element signature="e#13503#17300#0" expanded="false" />
+            <element signature="e#7460#8627#0" expanded="false" />
+            <element signature="e#8661#9203#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -536,10 +541,8 @@
         <state vertical-scroll-proportion="0.0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
-            <element signature="e#1636#1651#0" expanded="true" />
-            <element signature="e#7503#8670#0" expanded="false" />
-            <element signature="e#8704#9246#0" expanded="false" />
-            <element signature="e#13503#17300#0" expanded="false" />
+            <element signature="e#7460#8627#0" expanded="false" />
+            <element signature="e#8661#9203#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -565,10 +568,8 @@
         <state vertical-scroll-proportion="0.0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
-            <element signature="e#1636#1651#0" expanded="true" />
-            <element signature="e#7503#8670#0" expanded="false" />
-            <element signature="e#8704#9246#0" expanded="false" />
-            <element signature="e#13503#17300#0" expanded="false" />
+            <element signature="e#7460#8627#0" expanded="false" />
+            <element signature="e#8661#9203#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -594,10 +595,8 @@
         <state vertical-scroll-proportion="0.0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
-            <element signature="e#1636#1651#0" expanded="true" />
-            <element signature="e#7503#8670#0" expanded="false" />
-            <element signature="e#8704#9246#0" expanded="false" />
-            <element signature="e#13503#17300#0" expanded="false" />
+            <element signature="e#7460#8627#0" expanded="false" />
+            <element signature="e#8661#9203#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -607,10 +606,8 @@
         <state vertical-scroll-proportion="0.0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
-            <element signature="e#1636#1651#0" expanded="true" />
-            <element signature="e#7503#8670#0" expanded="false" />
-            <element signature="e#8704#9246#0" expanded="false" />
-            <element signature="e#13503#17300#0" expanded="false" />
+            <element signature="e#7460#8627#0" expanded="false" />
+            <element signature="e#8661#9203#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -620,10 +617,8 @@
         <state vertical-scroll-proportion="0.0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
-            <element signature="e#1636#1651#0" expanded="true" />
-            <element signature="e#7503#8670#0" expanded="false" />
-            <element signature="e#8704#9246#0" expanded="false" />
-            <element signature="e#13503#17300#0" expanded="false" />
+            <element signature="e#7460#8627#0" expanded="false" />
+            <element signature="e#8661#9203#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -633,10 +628,8 @@
         <state vertical-scroll-proportion="0.0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
-            <element signature="e#1636#1651#0" expanded="true" />
-            <element signature="e#7503#8670#0" expanded="false" />
-            <element signature="e#8704#9246#0" expanded="false" />
-            <element signature="e#13503#17300#0" expanded="false" />
+            <element signature="e#7460#8627#0" expanded="false" />
+            <element signature="e#8661#9203#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -817,23 +810,13 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/scripts/control_ik_vrep.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/scripts/control_ik.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.42857143">
-          <caret line="519" column="44" selection-start-line="519" selection-start-column="44" selection-end-line="519" selection-end-column="44" />
+        <state vertical-scroll-proportion="2.4285715">
+          <caret line="68" column="0" selection-start-line="68" selection-start-column="0" selection-end-line="68" selection-end-column="0" />
           <folding>
-            <element signature="e#1636#1651#0" expanded="true" />
-            <element signature="e#7503#8670#0" expanded="false" />
-            <element signature="e#8704#9246#0" expanded="false" />
-            <element signature="e#13503#17300#0" expanded="false" />
+            <element signature="e#7460#8627#0" expanded="false" />
+            <element signature="e#8661#9203#0" expanded="false" />
           </folding>
         </state>
       </provider>
