@@ -233,10 +233,9 @@ def delete_gazebo_models():
     except rospy.ServiceException, e:
         rospy.loginfo("Delete Model service call failed: {0}".format(e))
 
-def map_joystick(joystick,group):
+def map_joystick(joystick,group,kin):
     """
     Maps joystick input to joint position commands.
-
     @param joystick: an instance of a Joystick
     """
 
@@ -249,13 +248,11 @@ def map_joystick(joystick,group):
     waypoints = []
     joints = ['left_w0','left_w1','left_w2','left_e0','left_e1','left_s0','left_s1']
     ik_pose = group.get_current_pose().pose
-
     print("Press Ctrl-C to stop. ")
     while not rospy.is_shutdown():
         group.set_start_state_to_current_state()
         pos = [0.582583, -0.180819, 0.216003]
 
-        # waypoints.append(copy.deepcopy(ik_pose))
         print "Before: /n", ik_pose
         # ik_pose.orientation.w = 1
 
@@ -317,17 +314,24 @@ def map_joystick(joystick,group):
 
         print "After: /n", ik_pose
 
-        # if changed:
-        #     waypoints.append(copy.deepcopy(ik_pose))
-        #     (plan3, fraction) = group.compute_cartesian_path(
-        #                              waypoints,   # waypoints to follow
-        #                              0.01,        # eef_step
-        #                              0.0)         # jump_threshold
-        #     group.execute(plan3)
-        #     changed = False
+        pos = [ik_pose.position.x,ik_pose.position.y,ik_pose.position.z]
+        pos = [0.582583, -0.180819, 0.216003]
+        ori = [ik_pose.orientation.x,ik_pose.orientation.y,ik_pose.orientation.z, ik_pose.orientation.w]
 
-        group.set_pose_target(ik_pose,end_effector_link='left_gripper_base')
-        group.go(ik_pose, wait=False)
+        if changed:
+            if ori==True:
+                angles = kin.inverse_kinematics(pos,oril)
+            else:
+                angles = kin.inverse_kinematics(pos)
+            print 'Angles: ',angles
+            if not angles == None:
+                limb_joints = dict(zip(joints, angles))
+                try:
+                    group.set_joint_value_target(limb_joints)
+                except MoveItCommanderException:
+                    print'Unreachable position. Aborting'
+                    continue
+                group.go()
 
         rate.sleep()
 
@@ -361,7 +365,7 @@ def main():
     # Wait for the All Clear from emulator startup
     rospy.wait_for_message("/robot/sim/started", Empty)
 
-    # print("Getting robot state... ")
+    print("Getting robot state... ")
     rs = baxter_interface.RobotEnable(baxter_interface.CHECK_VERSION)
     init_state = rs.state().enabled
 
@@ -397,47 +401,28 @@ def main():
     robot = moveit_commander.RobotCommander()
     scene = moveit_commander.PlanningSceneInterface()
     group = moveit_commander.MoveGroupCommander('left_arm')
-    # # group.set_planner_id("ESTkConfigDefault")
+    # group.set_planner_id("ESTkConfigDefault")
     group.set_joint_value_target(starting_joint_angles)
     group.go()
-    # print group.get_current_pose().pose
 
-    #
-    # print "Initialisation finished."
-    #
-    # waypoints = []
+    print group.get_current_pose().pose
+    # 0.908952, 1.103975, 0.320976
+    pos = [0.582583, -0.180819, 0.216003]
+    rot = [0.03085, 0.9945, 0.0561, 0.0829]
+    limb = baxter_interface.Limb('left')
+    kin = baxter_kinematics('left')
+    print ''
+    angles = kin.inverse_kinematics(pos,rot)
+    print 'Angles: ',angles
+    raw_input()
 
-    # start with the current pose
-    # waypoints.append(group.get_current_pose().pose)
-    # print(group.get_current_pose().pose)
-    # # first orient gripper and move forward (+x)
-    # wpose = Pose()
-    # wpose.orientation.w = 1.0
-    # wpose.position.x = waypoints[0].position.x + 0.1
-    # wpose.position.y = waypoints[0].position.y
-    # wpose.position.z = waypoints[0].position.z
-    # waypoints.append(copy.deepcopy(wpose))
-    #
-    # # second move down
-    # wpose.position.z -= 0.1
-    # waypoints.append(copy.deepcopy(wpose))
-    #
-    # # third move to the side
-    # wpose.position.y += 0.1
-    # waypoints.append(copy.deepcopy(wpose))
-    #
-    # (plan3, fraction) = group.compute_cartesian_path(
-    #                              waypoints,   # waypoints to follow
-    #                              0.01,        # eef_step
-    #                              0.0)         # jump_threshold
-    # group.execute(plan3)
-    # print(group.get_current_pose().pose)
-    # print "============ Waiting while RVIZ displays plan3..."
-    # rospy.sleep(20)
+    limb_joints = dict(zip(joints, angles))
+    limb.move_to_joint_positions(limb_joints)
+    group.set_joint_value_target(limb_joints)
+    group.go()
 
     joystick = baxter_external_devices.joystick.XboxController()
-
-    map_joystick(joystick, group)
+    map_joystick(joystick, group, kin)
     print("Done.")
 
     return 0
