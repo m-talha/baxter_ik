@@ -365,9 +365,9 @@ def main():
     # Load Gazebo Models via Spawning Services
     # Note that the models reference is the /world frame
     # and the IK operates with respect to the /base frame
-    # load_gazebo_models()
+    load_gazebo_models()
     # Remove models from the scene on shutdown
-    # rospy.on_shutdown(delete_gazebo_models)
+    rospy.on_shutdown(delete_gazebo_models)
 
     # Wait for the All Clear from emulator startup
     rospy.wait_for_message("/robot/sim/started", Empty)
@@ -403,11 +403,11 @@ def main():
                              z=0.00737916180073,
                              w=0.00486450832011)
 
-    pnp = PickAndPlace(limb, hover_distance,verbose=False)
-    pnp.move_to_start(starting_joint_angles)
-
-    joystick = baxter_external_devices.joystick.XboxController()
-    map_joystick(joystick, pnp)
+    # pnp = PickAndPlace(limb, hover_distance,verbose=False)
+    # pnp.move_to_start(starting_joint_angles)
+    #
+    # joystick = baxter_external_devices.joystick.XboxController()
+    # map_joystick(joystick, pnp)
     print("Done.")
 
     return 0

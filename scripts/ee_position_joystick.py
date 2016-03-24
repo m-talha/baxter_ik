@@ -34,6 +34,20 @@ from baxter_core_msgs.srv import (
     SolvePositionIK,
     SolvePositionIKRequest,
 )
+
+try:
+    import vrep
+    import vrepConst
+    from vrep_common.srv import *
+except:
+    print ('--------------------------------------------------------------')
+    print ('"vrep.py" could not be imported. This means very probably that')
+    print ('either "vrep.py" or the remoteApi library could not be found.')
+    print ('Make sure both are in the same folder as this file,')
+    print ('or appropriately adjust the file "vrep.py"')
+    print ('--------------------------------------------------------------')
+    print ('')
+
 # Convert the last 4 entries in q from quaternion form to Euler Angle form and copy into p
 # Expect a 7x1 column vector and a preallocated 6x1 column vector (numpy)
 # p and q are both pose vectors
@@ -43,8 +57,14 @@ def quaternion_to_euler(q, p):
     p[0:3] = q[0:3]
     p[3], p[4], p[5] = tf.transformations.euler_from_quaternion(q[3:7].flatten().tolist())
 
+def syncPos(left,jntSrvCall):
+    # Set initial joint position in V-rep
+    curr_jnts = np.array([left.joint_angles()[name] for name in left.joint_names()])
+    # print curr_jnts
+    resp = jntSrvCall.call('set_jnt_pos@Baxter_leftArm_joint1',1,[],curr_jnts,[],'')
+
 # Get key commands from the user and move the end effector
-def map_joystick(joystick):
+def map_joystick(joystick, pose_pub):
     left = baxter_interface.Limb('left')
     right = baxter_interface.Limb('right')
     grip_left = baxter_interface.Gripper('left', CHECK_VERSION)
@@ -65,6 +85,27 @@ def map_joystick(joystick):
     right_iksvc = rospy.ServiceProxy(right_ns, SolvePositionIK)
     left_ns = "ExternalTools/left/PositionKinematicsNode/IKService"
     left_iksvc = rospy.ServiceProxy(left_ns, SolvePositionIK)
+    print('')
+
+    # Service to obtain joint positions from V-rep
+    jntSrvCall = rospy.ServiceProxy('vrep/simRosCallScriptFunction', simRosCallScriptFunction)
+    syncPos(left,jntSrvCall)
+
+
+    # Set initial joint pose in V-rep
+    # desired_p = np.array(left.endpoint_pose()['position']+left.endpoint_pose()['orientation'])
+    # print desired_p
+    # hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+    # pose = PoseStamped(
+    #             header = hdr,
+    #             pose = Pose(position=Point(x=desired_p[0], y=desired_p[1], z=desired_p[2]+1.08220972),
+    #             orientation = Quaternion(x=desired_p[3], y=desired_p[4], z=desired_p[5], w=desired_p[6]))
+    #         )
+    # print pose.pose.position
+    # pose_pub.publish(pose)
+
+
+    current_p = np.array(left.endpoint_pose()['position']+left.endpoint_pose()['orientation'])
  
     def command_jacobian(side, direction):
         if side == 'left':
@@ -78,7 +119,7 @@ def map_joystick(joystick):
 
         # current is the current position of end effector
         # We need to reshape it from quaternion to Euler Angle
-        current_q = np.array(limb.endpoint_pose()['position']+limb.endpoint_pose()['orientation']) 
+        current_q = np.array(limb.endpoint_pose()['position']+limb.endpoint_pose()['orientation'])
         current_q = current_q.reshape((7, 1))
         current = np.zeros((6, 1))
         quaternion_to_euler(current_q, current)
@@ -120,34 +161,51 @@ def map_joystick(joystick):
             limb = right
             iksvc = right_iksvc
             ns = right_ns
-        current_p = np.array(limb.endpoint_pose()['position']+limb.endpoint_pose()['orientation']) 
-        direction = np.array(direction)
-        desired_p = current_p + direction
-        print desired_p
-        ikreq = SolvePositionIKRequest()
-        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
-        pose = { side : PoseStamped(
-                    header = hdr,
-                    pose = Pose(position=Point(x=desired_p[0], y=desired_p[1], z=desired_p[2]),
-                    orientation = Quaternion(x=desired_p[3], y=desired_p[4], z=desired_p[5], w=desired_p[6]))
-                ) }
 
-        ikreq.pose_stamp.append(pose[side])
-        try:
-            rospy.wait_for_service(ns, 5.0)
-            resp = iksvc(ikreq)
-        except (rospy.ServiceException, rospy.ROSException), e:
-            rospy.logerr("Service call failed: %s" % (e,))
-            return
-        print "Got response"
-        resp_seeds = struct.unpack('<%dB' % len(resp.result_type),
-                                   resp.result_type)
-        if (resp_seeds[0] != resp.RESULT_INVALID):
-            limb_joints = dict(zip(resp.joints[0].name, resp.joints[0].position))
-            limb.set_joint_positions(limb_joints)
-        else:
+        # current_p = np.array(limb.endpoint_pose()['position']+limb.endpoint_pose()['orientation'])
+        print 'Current: ', current_p
+        direction = np.array(direction)
+        # print 'Direction: ', direction
+        desired_p = current_p + direction
+        print 'Desired: ', desired_p
+
+        # Publish desired position so V-rep can obtain it
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        pose = PoseStamped(
+                    header = hdr,
+                    pose = Pose(position=Point(x=desired_p[0], y=desired_p[1], z=desired_p[2]+1.082),
+                    orientation = Quaternion(x=desired_p[3], y=desired_p[4], z=desired_p[5], w=desired_p[6]))
+                )
+        pose_pub.publish(pose)
+
+        # TODO: Wait for v-rep to set IK is finished
+        return desired_p
+        # ikreq = SolvePositionIKRequest()
+        # hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        # pose = { side : PoseStamped(
+        #             header = hdr,
+        #             pose = Pose(position=Point(x=desired_p[0], y=desired_p[1], z=desired_p[2]),
+        #             orientation = Quaternion(x=desired_p[3], y=desired_p[4], z=desired_p[5], w=desired_p[6]))
+        #         ) }
+        #
+        # ikreq.pose_stamp.append(pose[side])
+        # try:
+        #     rospy.wait_for_service(ns, 5.0)
+        #     resp = iksvc(ikreq)
+        # except (rospy.ServiceException, rospy.ROSException), e:
+        #     rospy.logerr("Service call failed: %s" % (e,))
+        #     return
+        # print "Got response"
+        # resp_seeds = struct.unpack('<%dB' % len(resp.result_type),
+        #                            resp.result_type)
+        # if (resp_seeds[0] != resp.RESULT_INVALID):
+            # print 'SDK: ', resp.joints[0].name
+            # limb_joints = dict(zip(resp.joints[0].name, resp.joints[0].position))
+            # print 'SDK Joints: ',limb_joints
+            # limb.set_joint_positions(limb_joints)
+        # else:
             #How to recover from this
-            return
+            # return
 # [ 0.4822262   0.30134021  0.15427896 -0.13936993  0.97700031  0.1613507
 #  -0.00351703]
     def reset(limb):
@@ -159,12 +217,12 @@ def map_joystick(joystick):
                              '{0}_s0'.format(limb.name): 0.4822262,
                              '{0}_s1'.format(limb.name): 0.30134021}
         print 'reset'
-        limb.move_to_joint_positions(starting_joint_angles)
+        # limb.move_to_joint_positions(starting_joint_angles)
         print 'done'
     # reset(left)
     # reset(right)
     zeros = [0]*4
-    inc = 0.1
+    inc = 0.01
 
     def print_help(bindings_list):
         print("Press Ctrl-C to quit.")
@@ -206,9 +264,9 @@ def map_joystick(joystick):
         ((jhi, ['leftStickVert']),
          (command_ik, ['left', [inc, 0, 0]+zeros]), lambda: "left x inc "),
         ((bdn, ['dPadUp']),
-         (command_ik, ['left', [0, 0, -inc]+zeros]), lambda: "left z dec "),
+         (command_ik, ['left', [0, 0, inc]+zeros]), lambda: "left z dec "),
         ((bdn, ['dPadDown']),
-         (command_ik, ['left', [0, 0, inc]+zeros]), lambda: "left z inc "),
+         (command_ik, ['left', [0, 0, -inc]+zeros]), lambda: "left z inc "),
         ((bdn, ['leftBumper']),
          (grip_left.calibrate, []), "left calibrate"),
         ((bdn, ['rightBumper']),
@@ -226,11 +284,22 @@ def map_joystick(joystick):
     while not rospy.is_shutdown():
         for (test, cmd, doc) in bindings:
             if test[0](*test[1]):
-                cmd[0](*cmd[1])
+                current_p = cmd[0](*cmd[1])
                 if callable(doc):
                     print(doc())
                 else:
                     print(doc)
+        # Get resulting joint positions from V-rep
+        resp = jntSrvCall.call('get_jnt_pos@Baxter_leftArm_joint1',1,[],[],[],'')
+        limb_joints = dict(zip(left._joint_names['left'], resp.outputFloats))
+        # print 'V-rep Joints: ',limb_joints
+        print '---------------------------------------------------------------------------------'
+        left.set_joint_positions(limb_joints)
+        # current_p = np.array(left.endpoint_pose()['position']+left.endpoint_pose()['orientation'])
+        print 'Actual pose: ',current_p
+        # print 'Actual: ', left.joint_angles()
+        print '---------------------------------------------------------------------------------'
+        # syncPos(left,jntSrvCall)
         """if len(lcmd):
             left.set_joint_positions(lcmd)
             lcmd.clear()
@@ -271,6 +340,7 @@ key bindings.
         choices=['xbox', 'logitech', 'ps3'],
         help='specify the type of joystick to use'
     )
+
     args = parser.parse_args(rospy.myargv()[1:])
 
     joystick = None
@@ -296,12 +366,23 @@ key bindings.
             rs.disable()
     rospy.on_shutdown(clean_shutdown)
 
-    print("Enabling robot... ")
+    rospy.loginfo("Enabling robot... ")
     rs.enable()
 
-    map_joystick(joystick)
+    pose_pub = rospy.Publisher("/ik_baxter/d_pose", PoseStamped,queue_size=1)
+    #
+    # while not rospy.is_shutdown():
+    #     hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+    #     pose = PoseStamped(
+    #                 header = hdr,
+    #                 pose = Pose(position=Point(x=0.92583, y=-0.180819, z=1.416003),
+    #                 orientation = Quaternion(x=0.03085, y=0.9945, z=0.0561, w=0.0829))
+    #             )
+    #     pose_pub.publish(pose)
+    map_joystick(joystick,pose_pub)
     print("Done.")
-
+import sys
 if __name__ == '__main__':
+    print sys.path
     main()
 
