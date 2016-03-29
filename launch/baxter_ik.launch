@@ -1,0 +1,6 @@
+<launch>
+  <node name="joy_control" pkg="joy" type="joy_node"/>
+  <node name="baxter_ik" pkg="baxter_ik" type="ee_position_joystick.py" args="-j xbox" output="screen"/>
+  <node name="camera_head" pkg="image_view" type="image_view" args="image:=/cameras/head_camera/image"/>
+  <node name="camera_left_hand" pkg="image_view" type="image_view" args="image:=/cameras/left_hand_camera/image"/>
+</launch>
