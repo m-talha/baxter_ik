@@ -7,6 +7,7 @@ project(baxter_ik)
 find_package(catkin REQUIRED COMPONENTS
   rosout
   rospy
+  vrep_common
 )
 
 ## System dependencies are found with CMake's conventions
@@ -100,7 +101,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
 #  INCLUDE_DIRS include
-#  LIBRARIES baxter_ik
+  LIBRARIES v_repExtRos remoteApi
 #  CATKIN_DEPENDS rosout rospy
 #  DEPENDS system_lib
 )
@@ -116,10 +117,14 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
+link_directories(scripts/)
+
 ## Declare a C++ library
 # add_library(baxter_ik
 #   src/${PROJECT_NAME}/baxter_ik.cpp
 # )
+
+# add_library(v_repExtRos remoteApi)
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
@@ -132,12 +137,13 @@ include_directories(
 ## Add cmake target dependencies of the executable
 ## same as for the library above
 # add_dependencies(baxter_ik_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+# add_dependencies(v_repExtRos ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
 # target_link_libraries(baxter_ik_node
 #   ${catkin_LIBRARIES}
 # )
-
+link_libraries(v_repExtRos remoteApi)
 #############
 ## Install ##
 #############

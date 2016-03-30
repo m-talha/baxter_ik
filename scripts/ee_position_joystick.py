@@ -57,11 +57,11 @@ def quaternion_to_euler(q, p):
     p[0:3] = q[0:3]
     p[3], p[4], p[5] = tf.transformations.euler_from_quaternion(q[3:7].flatten().tolist())
 
-def syncPos(left,jntSrvCall):
+def syncPos(limb,jntSrvCall):
     # Set initial joint position in V-rep
-    curr_jnts = np.array([left.joint_angles()[name] for name in left.joint_names()])
+    curr_jnts = np.array([limb.joint_angles()[name] for name in limb.joint_names()])
     # print curr_jnts
-    resp = jntSrvCall.call('set_jnt_pos@Baxter_leftArm_joint1',1,[],curr_jnts,[],'')
+    resp = jntSrvCall.call('set_jnt_pos@Baxter_leftArm_target',1,[],curr_jnts,[],'')
 
 # Get key commands from the user and move the end effector
 def map_joystick(joystick, pose_pub):
@@ -69,12 +69,14 @@ def map_joystick(joystick, pose_pub):
     right = baxter_interface.Limb('right')
     grip_left = baxter_interface.Gripper('left', CHECK_VERSION)
     grip_right = baxter_interface.Gripper('right', CHECK_VERSION)
-    
+
+    orient = False
     #abbreviations
     jhi = lambda s: joystick.stick_value(s) > 0
     jlo = lambda s: joystick.stick_value(s) < 0
     bdn = joystick.button_down
     bup = joystick.button_up
+    ori = lambda v: orient if v=='up' else not orient
 
     #These are from PyKDL and are needed for the Jacobian
     left_kin = baxter_kinematics('left')
@@ -87,11 +89,19 @@ def map_joystick(joystick, pose_pub):
     left_iksvc = rospy.ServiceProxy(left_ns, SolvePositionIK)
     print('')
 
-    # Service to obtain joint positions from V-rep
+    # Service to subscribe to desired pose from V-rep
+    objHndCall = rospy.ServiceProxy('vrep/simRosGetObjectHandle', simRosGetObjectHandle)
+    resp = objHndCall.call('Baxter_leftArm_target')
+    ikTarget = resp.handle
+
+    # Service for V-rep to subscribe to desired pose
+    poseSubCall = rospy.ServiceProxy('vrep/simRosEnableSubscriber', simRosEnableSubscriber)
+    resp = poseSubCall.call('/ik_baxter/d_pose',1,10243,ikTarget,-1,'')
+
+    # Service to sync joint positions in V-rep
     jntSrvCall = rospy.ServiceProxy('vrep/simRosCallScriptFunction', simRosCallScriptFunction)
     syncPos(left,jntSrvCall)
-
-
+    # rospy.sleep(5)
     # Set initial joint pose in V-rep
     # desired_p = np.array(left.endpoint_pose()['position']+left.endpoint_pose()['orientation'])
     # print desired_p
@@ -163,11 +173,11 @@ def map_joystick(joystick, pose_pub):
             ns = right_ns
 
         # current_p = np.array(limb.endpoint_pose()['position']+limb.endpoint_pose()['orientation'])
-        print 'Current: ', current_p
+        # print 'Current: ', current_p
         direction = np.array(direction)
         # print 'Direction: ', direction
         desired_p = current_p + direction
-        print 'Desired: ', desired_p
+        # print 'Desired: ', desired_p
 
         # Publish desired position so V-rep can obtain it
         hdr = Header(stamp=rospy.Time.now(), frame_id='base')
@@ -206,21 +216,7 @@ def map_joystick(joystick, pose_pub):
         # else:
             #How to recover from this
             # return
-# [ 0.4822262   0.30134021  0.15427896 -0.13936993  0.97700031  0.1613507
-#  -0.00351703]
-    def reset(limb):
-        starting_joint_angles = {'{0}_w0'.format(limb.name): 0.97700031,
-                             '{0}_w1'.format(limb.name): 0.1613507,
-                             '{0}_w2'.format(limb.name): -0.00351703,
-                             '{0}_e0'.format(limb.name): 0.15427896,
-                             '{0}_e1'.format(limb.name): -0.13936993,
-                             '{0}_s0'.format(limb.name): 0.4822262,
-                             '{0}_s1'.format(limb.name): 0.30134021}
-        print 'reset'
-        # limb.move_to_joint_positions(starting_joint_angles)
-        print 'done'
-    # reset(left)
-    # reset(right)
+
     zeros = [0]*4
     inc = 0.01
 
@@ -239,22 +235,6 @@ def map_joystick(joystick, pose_pub):
          (grip_left.close,  []), "left gripper close"),
         ((bup, ['leftTrigger']),
          (grip_left.open,   []), "left gripper open"),
-        ((bdn, ['rightTrigger']),
-         (grip_right.close, []), "right gripper close"),
-        ((bup, ['rightTrigger']),
-         (grip_right.open,  []), "right gripper open"),
-        ((jlo, ['rightStickHorz']),
-         (command_ik, ['right', [0, -inc, 0]+zeros]), lambda: "right y dec "),
-        ((jhi, ['rightStickHorz']),
-         (command_ik, ['right', [0, inc, 0]+zeros],), lambda: "right y inc "),
-        ((jlo, ['rightStickVert']),
-         (command_ik, ['right', [-inc, 0, 0]+zeros]), lambda: "right x dec "),
-        ((jhi, ['rightStickVert']),
-         (command_ik, ['right', [inc, 0, 0]+zeros]), lambda: "right x inc "),
-        ((bdn, ['btnUp']),
-         (command_ik, ['right', [0, 0, inc]+zeros]), lambda: "right z inc "),
-        ((bdn, ['btnDown']),
-         (command_ik, ['right', [0, 0, -inc]+zeros]), lambda: "right z dec "),
         ((jlo, ['leftStickHorz']),
          (command_ik, ['left', [0, -inc, 0]+zeros]), lambda: "left y dec "),
         ((jhi, ['leftStickHorz']),
@@ -263,14 +243,18 @@ def map_joystick(joystick, pose_pub):
          (command_ik, ['left', [-inc, 0, 0]+zeros]), lambda: "left x dec "),
         ((jhi, ['leftStickVert']),
          (command_ik, ['left', [inc, 0, 0]+zeros]), lambda: "left x inc "),
-        ((bdn, ['dPadUp']),
-         (command_ik, ['left', [0, 0, inc]+zeros]), lambda: "left z dec "),
-        ((bdn, ['dPadDown']),
-         (command_ik, ['left', [0, 0, -inc]+zeros]), lambda: "left z inc "),
+        ((jlo, ['rightStickVert']),
+         (command_ik, ['left', [0, 0, -inc]+zeros]), lambda: "left z dec "),
+        ((jhi, ['rightStickVert']),
+         (command_ik, ['left', [0, 0, inc]+zeros]), lambda: "left z inc "),
         ((bdn, ['leftBumper']),
-         (grip_left.calibrate, []), "left calibrate"),
-        ((bdn, ['rightBumper']),
-         (grip_right.calibrate, []), "right calibrate"),
+         (lambda: orient,[]), "Switched to orientation"),
+        ((bup, ['leftBumper']),
+         (lambda: not orient, []), "Switched to position"),
+        # ((bdn, ['leftBumper']),
+        #  (grip_left.calibrate, []), "left calibrate"),
+        # ((bdn, ['rightBumper']),
+        #  (grip_right.calibrate, []), "right calibrate"),
         ((bdn, ['function1']),
          (print_help, [bindings_list]), "help"),
         ((bdn, ['function2']),
@@ -290,15 +274,16 @@ def map_joystick(joystick, pose_pub):
                 else:
                     print(doc)
         # Get resulting joint positions from V-rep
-        resp = jntSrvCall.call('get_jnt_pos@Baxter_leftArm_joint1',1,[],[],[],'')
+        resp = jntSrvCall.call('get_jnt_pos@Baxter_leftArm_target',1,[],[],[],'')
+        # resp.outputFloats = [0.0,0.0,0.0,0.0,0.0,0.0,0.0]
         limb_joints = dict(zip(left._joint_names['left'], resp.outputFloats))
         # print 'V-rep Joints: ',limb_joints
-        print '---------------------------------------------------------------------------------'
+        # print '---------------------------------------------------------------------------------'
         left.set_joint_positions(limb_joints)
         # current_p = np.array(left.endpoint_pose()['position']+left.endpoint_pose()['orientation'])
-        print 'Actual pose: ',current_p
-        # print 'Actual: ', left.joint_angles()
-        print '---------------------------------------------------------------------------------'
+        # print 'Actual pose: ',current_p
+        # print 'Actual joints: ', left.joint_angles()
+        # print '---------------------------------------------------------------------------------'
         # syncPos(left,jntSrvCall)
         """if len(lcmd):
             left.set_joint_positions(lcmd)
@@ -370,6 +355,7 @@ key bindings.
     rs.enable()
 
     pose_pub = rospy.Publisher("/ik_baxter/d_pose", PoseStamped,queue_size=1)
+
     #
     # while not rospy.is_shutdown():
     #     hdr = Header(stamp=rospy.Time.now(), frame_id='base')
