@@ -22,6 +22,7 @@ from baxter_interface import CHECK_VERSION
 from baxter_pykdl import baxter_kinematics
 
 import numpy as np
+import math
 
 from geometry_msgs.msg import (
     PoseStamped,
@@ -57,14 +58,15 @@ def quaternion_to_euler(q, p):
     p[0:3] = q[0:3]
     p[3], p[4], p[5] = tf.transformations.euler_from_quaternion(q[3:7].flatten().tolist())
 
-def syncPos(limb,jntSrvCall):
-    # Set initial joint position in V-rep
-    curr_jnts = np.array([limb.joint_angles()[name] for name in limb.joint_names()])
-    # print curr_jnts
-    resp = jntSrvCall.call('set_jnt_pos@Baxter_leftArm_target',1,[],curr_jnts,[],'')
+def rad_to_deg(r):
+    deg = np.zeros(r.size)
+    for i in range(r.size):
+        deg[i] = math.degrees(r[i])
+    return deg
 
 # Get key commands from the user and move the end effector
-def map_joystick(joystick, pose_pub):
+def map_joystick(joystick):
+# def map_joystick(joystick, pose_pub):
     left = baxter_interface.Limb('left')
     right = baxter_interface.Limb('right')
     grip_left = baxter_interface.Gripper('left', CHECK_VERSION)
@@ -77,6 +79,10 @@ def map_joystick(joystick, pose_pub):
     bdn = joystick.button_down
     bup = joystick.button_up
     ori = lambda v: orient if v=='up' else not orient
+    zeros = [0]*4
+    inc = 0.03
+    syncErrThresh = 0.03
+    vrepZdelta = 1.08220972
 
     #These are from PyKDL and are needed for the Jacobian
     left_kin = baxter_kinematics('left')
@@ -90,33 +96,34 @@ def map_joystick(joystick, pose_pub):
     print('')
 
     # Service to subscribe to desired pose from V-rep
-    objHndCall = rospy.ServiceProxy('vrep/simRosGetObjectHandle', simRosGetObjectHandle)
-    resp = objHndCall.call('Baxter_leftArm_target')
-    ikTarget = resp.handle
+    # objHndCall = rospy.ServiceProxy('vrep/simRosGetObjectHandle', simRosGetObjectHandle)
+    # resp = objHndCall.call('Baxter_leftArm_target')
+    # ikTarget = resp.handle
 
     # Service for V-rep to subscribe to desired pose
-    poseSubCall = rospy.ServiceProxy('vrep/simRosEnableSubscriber', simRosEnableSubscriber)
-    resp = poseSubCall.call('/ik_baxter/d_pose',1,10243,ikTarget,-1,'')
+    # poseSubCall = rospy.ServiceProxy('vrep/simRosEnableSubscriber', simRosEnableSubscriber)
+    # resp = poseSubCall.call('/ik_baxter/d_pose',1,10243,ikTarget,-1,'')
 
-    # Service to sync joint positions in V-rep
-    jntSrvCall = rospy.ServiceProxy('vrep/simRosCallScriptFunction', simRosCallScriptFunction)
-    syncPos(left,jntSrvCall)
-    # rospy.sleep(5)
-    # Set initial joint pose in V-rep
-    # desired_p = np.array(left.endpoint_pose()['position']+left.endpoint_pose()['orientation'])
-    # print desired_p
-    # hdr = Header(stamp=rospy.Time.now(), frame_id='base')
-    # pose = PoseStamped(
-    #             header = hdr,
-    #             pose = Pose(position=Point(x=desired_p[0], y=desired_p[1], z=desired_p[2]+1.08220972),
-    #             orientation = Quaternion(x=desired_p[3], y=desired_p[4], z=desired_p[5], w=desired_p[6]))
-    #         )
-    # print pose.pose.position
-    # pose_pub.publish(pose)
+    # Service to call functions in V-rep (e.g. set/get joint positions)
+    vrepScriptFunc = rospy.ServiceProxy('vrep/simRosCallScriptFunction', simRosCallScriptFunction)
 
+    def syncPos(limb,jntSrvCall):
+        while (True):
+            # Set initial joint position in V-rep
+            curr_jnts = np.array([limb.joint_angles()[name] for name in limb.joint_names()])
+            # print curr_jnts
+            resp = jntSrvCall.call('set_jnt_pos@Baxter_leftArm_target',1,[],curr_jnts,[],'')
+            resp = jntSrvCall.call('get_jnt_pos@Baxter_leftArm_target',1,[],[],[],'')
+            err = math.fabs(np.linalg.norm(np.array(resp.outputFloats)-curr_jnts))
+            print 'Error: ',err
+            print 'V-rep Joints: ',resp.outputFloats
+            print '---------------------------------------------------------------------------------'
+            curr_deg = rad_to_deg(curr_jnts)
+            print 'Actual joints: ', curr_jnts
+            print '---------------------------------------------------------------------------------'
+            if err < abs(syncErrThresh):
+                break
 
-    current_p = np.array(left.endpoint_pose()['position']+left.endpoint_pose()['orientation'])
- 
     def command_jacobian(side, direction):
         if side == 'left':
             limb = left
@@ -172,13 +179,42 @@ def map_joystick(joystick, pose_pub):
             iksvc = right_iksvc
             ns = right_ns
 
-        # current_p = np.array(limb.endpoint_pose()['position']+limb.endpoint_pose()['orientation'])
-        # print 'Current: ', current_p
-        direction = np.array(direction)
-        # print 'Direction: ', direction
-        desired_p = current_p + direction
-        # print 'Desired: ', desired_p
+        # desired_p = np.array(limb.endpoint_pose()['position']+limb.endpoint_pose()['orientation'])
 
+        if orient == True:
+            # print(temp[3:])
+            direction = [x*500*math.pi/180 for x in direction]
+            inc = tf.transformations.quaternion_from_euler(direction[0],direction[1],direction[2])
+            print('Inc: ', inc)
+            resp = vrepScriptFunc.call('get_pose@Baxter_leftArm_target',1,[],[],[],'')
+            curr = np.array(resp.outputFloats[3:])
+            curr_euler = tf.transformations.euler_from_quaternion(curr)
+            print('Current Euler: ',curr_euler)
+            print('Current Quarternion: ', curr)
+            mag = math.sqrt(np.sum(curr**2))
+            print('Current magnitude: ', mag)
+            new_quar = tf.transformations.quaternion_multiply(inc,curr)
+            print('New quaternion: ',new_quar)
+            mag = math.sqrt(np.sum(new_quar**2))
+            print('New magnitude: ', mag)
+            new_euler = tf.transformations.euler_from_quaternion(new_quar)
+            print('New Euler: ',new_euler)
+            direction = [0]*3 + new_quar.tolist()
+            # print direction
+
+        else:
+            direction = direction+zeros
+
+        # print('Current: ', temp)
+        direction = np.array(direction)
+        # print('Direction: ', direction)
+        resp =vrepScriptFunc.call('set_pose@Baxter_leftArm_target',1,[],direction,[],'')
+        desired_p = temp + direction
+        # print('Desired: ', desired_p)
+
+        return desired_p
+
+    def pub_desired_pose(desired_p):
         # Publish desired position so V-rep can obtain it
         hdr = Header(stamp=rospy.Time.now(), frame_id='base')
         pose = PoseStamped(
@@ -186,39 +222,24 @@ def map_joystick(joystick, pose_pub):
                     pose = Pose(position=Point(x=desired_p[0], y=desired_p[1], z=desired_p[2]+1.082),
                     orientation = Quaternion(x=desired_p[3], y=desired_p[4], z=desired_p[5], w=desired_p[6]))
                 )
-        pose_pub.publish(pose)
+        # pose_pub.publish(pose)
 
-        # TODO: Wait for v-rep to set IK is finished
-        return desired_p
-        # ikreq = SolvePositionIKRequest()
-        # hdr = Header(stamp=rospy.Time.now(), frame_id='base')
-        # pose = { side : PoseStamped(
-        #             header = hdr,
-        #             pose = Pose(position=Point(x=desired_p[0], y=desired_p[1], z=desired_p[2]),
-        #             orientation = Quaternion(x=desired_p[3], y=desired_p[4], z=desired_p[5], w=desired_p[6]))
-        #         ) }
-        #
-        # ikreq.pose_stamp.append(pose[side])
-        # try:
-        #     rospy.wait_for_service(ns, 5.0)
-        #     resp = iksvc(ikreq)
-        # except (rospy.ServiceException, rospy.ROSException), e:
-        #     rospy.logerr("Service call failed: %s" % (e,))
-        #     return
-        # print "Got response"
-        # resp_seeds = struct.unpack('<%dB' % len(resp.result_type),
-        #                            resp.result_type)
-        # if (resp_seeds[0] != resp.RESULT_INVALID):
-            # print 'SDK: ', resp.joints[0].name
-            # limb_joints = dict(zip(resp.joints[0].name, resp.joints[0].position))
-            # print 'SDK Joints: ',limb_joints
-            # limb.set_joint_positions(limb_joints)
-        # else:
-            #How to recover from this
-            # return
+    def pos_to_ori(s,ori):
+        ori = s=='down'
+        return ori
 
-    zeros = [0]*4
-    inc = 0.01
+    def grip_l_open():
+        grip_left.open()
+        vrepScriptFunc.call('grip@BaxterGripper',1,[0],[],[],'')
+
+    def grip_l_close():
+        grip_left.close()
+        vrepScriptFunc.call('grip@BaxterGripper',1,[1],[],[],'')
+
+    def reset_pos():
+        outputFloats = [-0.523599,-1.22173,0.0,2.44346,0.0,0.523599,0.0]
+        limb_joints = dict(zip(left._joint_names['left'], outputFloats))
+        left.move_to_joint_positions(limb_joints)
 
     def print_help(bindings_list):
         print("Press Ctrl-C to quit.")
@@ -228,29 +249,28 @@ def map_joystick(joystick, pose_pub):
                     doc = doc()
                 print("%s: %s" % (str(test[1][0]), doc))
 
-
     bindings_list = []
     bindings = (
         ((bdn, ['leftTrigger']),
-         (grip_left.close,  []), "left gripper close"),
+         (grip_l_close,  []), "left gripper close"),
         ((bup, ['leftTrigger']),
-         (grip_left.open,   []), "left gripper open"),
-        ((jlo, ['leftStickHorz']),
-         (command_ik, ['left', [0, -inc, 0]+zeros]), lambda: "left y dec "),
-        ((jhi, ['leftStickHorz']),
-         (command_ik, ['left', [0, inc, 0]+zeros]), lambda: "left y inc "),
-        ((jlo, ['leftStickVert']),
-         (command_ik, ['left', [-inc, 0, 0]+zeros]), lambda: "left x dec "),
-        ((jhi, ['leftStickVert']),
-         (command_ik, ['left', [inc, 0, 0]+zeros]), lambda: "left x inc "),
-        ((jlo, ['rightStickVert']),
-         (command_ik, ['left', [0, 0, -inc]+zeros]), lambda: "left z dec "),
-        ((jhi, ['rightStickVert']),
-         (command_ik, ['left', [0, 0, inc]+zeros]), lambda: "left z inc "),
+         (grip_l_open,   []), "left gripper open"),
         ((bdn, ['leftBumper']),
-         (lambda: orient,[]), "Switched to orientation"),
+         (pos_to_ori,['down', orient]), "Switched to orientation"),
         ((bup, ['leftBumper']),
-         (lambda: not orient, []), "Switched to position"),
+         (pos_to_ori,['up', orient]), "Switched to position"),
+        ((jlo, ['leftStickHorz']),
+         (command_ik, ['left', [0, -inc, 0]]), lambda: "left y dec "),
+        ((jhi, ['leftStickHorz']),
+         (command_ik, ['left', [0, inc, 0]]), lambda: "left y inc "),
+        ((jlo, ['leftStickVert']),
+         (command_ik, ['left', [-inc, 0, 0]]), lambda: "left x dec "),
+        ((jhi, ['leftStickVert']),
+         (command_ik, ['left', [inc, 0, 0]]), lambda: "left x inc "),
+        ((jlo, ['rightStickVert']),
+         (command_ik, ['left', [0, 0, -inc]]), lambda: "left z dec "),
+        ((jhi, ['rightStickVert']),
+         (command_ik, ['left', [0, 0, inc]]), lambda: "left z inc "),
         # ((bdn, ['leftBumper']),
         #  (grip_left.calibrate, []), "left calibrate"),
         # ((bdn, ['rightBumper']),
@@ -262,29 +282,65 @@ def map_joystick(joystick, pose_pub):
         )
     bindings_list.append(bindings)
 
+    reset_pos()
+    # Initial synchronisation of Baxter and V-rep
+    print('Synchronising pose...')
+    syncPos(left,vrepScriptFunc)
+    print('Pose synchronised')
+
+    current_p = desired_p = np.array(left.endpoint_pose()['position']+left.endpoint_pose()['orientation'])
+
     rate = rospy.Rate(100)
     print_help(bindings_list)
     print("Press Ctrl-C to stop. ")
     while not rospy.is_shutdown():
+        temp = current_p
         for (test, cmd, doc) in bindings:
             if test[0](*test[1]):
-                current_p = cmd[0](*cmd[1])
+                if cmd[0] == pos_to_ori:
+                    orient = cmd[0](*cmd[1])
+                elif cmd[0] == command_ik:
+                    # current_p = cmd[0](*cmd[1])
+                    temp = cmd[0](*cmd[1])
+                else:
+                    cmd[0](*cmd[1])
                 if callable(doc):
                     print(doc())
                 else:
                     print(doc)
+
+        # desired_p = temp
+        # err = math.fabs(np.linalg.norm(desired_p-current_p))
+        # print 'Error: ',err
+        # if err > 0.001:
+            # pub_desired_pose(current_p)
+        # pub_desired_pose(desired_p)
+            # print 'Current before: ', current_p
+            # current_p = np.array(left.endpoint_pose()['position']+left.endpoint_pose()['orientation'])
+            # print 'Current after: ', current_p
+
         # Get resulting joint positions from V-rep
-        resp = jntSrvCall.call('get_jnt_pos@Baxter_leftArm_target',1,[],[],[],'')
-        # resp.outputFloats = [0.0,0.0,0.0,0.0,0.0,0.0,0.0]
-        limb_joints = dict(zip(left._joint_names['left'], resp.outputFloats))
-        # print 'V-rep Joints: ',limb_joints
-        # print '---------------------------------------------------------------------------------'
-        left.set_joint_positions(limb_joints)
-        # current_p = np.array(left.endpoint_pose()['position']+left.endpoint_pose()['orientation'])
-        # print 'Actual pose: ',current_p
-        # print 'Actual joints: ', left.joint_angles()
-        # print '---------------------------------------------------------------------------------'
-        # syncPos(left,jntSrvCall)
+        resp = vrepScriptFunc.call('get_jnt_pos@Baxter_leftArm_target',1,[],[],[],'')
+
+        # Compare joints
+        curr_jnts = np.array([left.joint_angles()[name] for name in left.joint_names()])
+        err = math.fabs(np.linalg.norm(np.array(resp.outputFloats)-curr_jnts))
+        print('Error: ',err)
+        if err > abs(syncErrThresh):
+            # Wrap and send joint positions to Baxter
+            limb_joints = dict(zip(left._joint_names['left'], resp.outputFloats))
+            left.set_joint_positions(limb_joints)
+            current_p = np.array(left.endpoint_pose()['position']+left.endpoint_pose()['orientation'])
+
+
+            # print('V-rep Joints: ',limb_joints)
+            # resp = vrepScriptFunc.call('get_pose@Baxter_leftArm_target',1,[],[],[],'')
+            # print 'V-rep pose: ',resp.outputFloats
+            # print('---------------------------------------------------------------------------------'/0)
+            # print 'Finish pose: ',current_p
+            # print('Actual joints: ', left.joint_angles())
+            # print('---------------------------------------------------------------------------------')
+
         """if len(lcmd):
             left.set_joint_positions(lcmd)
             lcmd.clear()
@@ -292,8 +348,8 @@ def map_joystick(joystick, pose_pub):
             right.set_joint_positions(rcmd)
             rcmd.clear()"""
         rate.sleep()
-    return False
 
+    return False
 
 def main():
     """RSDK Joint Position Example: Joystick Control
@@ -344,8 +400,12 @@ key bindings.
     rs = baxter_interface.RobotEnable(CHECK_VERSION)
     init_state = rs.state().enabled
 
+    vrepSimStart = rospy.ServiceProxy('vrep/simRosStartSimulation',simRosStartSimulation)
+    vrepSimStop = rospy.ServiceProxy('vrep/simRosStopSimulation',simRosStopSimulation)
+
     def clean_shutdown():
         print("\nExiting example.")
+        vrepSimStop.call()
         if not init_state:
             print("Disabling robot...")
             rs.disable()
@@ -354,21 +414,12 @@ key bindings.
     rospy.loginfo("Enabling robot... ")
     rs.enable()
 
-    pose_pub = rospy.Publisher("/ik_baxter/d_pose", PoseStamped,queue_size=1)
-
-    #
-    # while not rospy.is_shutdown():
-    #     hdr = Header(stamp=rospy.Time.now(), frame_id='base')
-    #     pose = PoseStamped(
-    #                 header = hdr,
-    #                 pose = Pose(position=Point(x=0.92583, y=-0.180819, z=1.416003),
-    #                 orientation = Quaternion(x=0.03085, y=0.9945, z=0.0561, w=0.0829))
-    #             )
-    #     pose_pub.publish(pose)
-    map_joystick(joystick,pose_pub)
+    vrepSimStart.call()
+    # pose_pub = rospy.Publisher("/ik_baxter/d_pose", PoseStamped,queue_size=1)
+    # map_joystick(joystick,pose_pub)
+    map_joystick(joystick)
     print("Done.")
-import sys
+
 if __name__ == '__main__':
-    print sys.path
     main()
 
