@@ -80,7 +80,7 @@ def map_joystick(joystick):
     bup = joystick.button_up
     ori = lambda v: orient if v=='up' else not orient
     zeros = [0]*4
-    inc = 0.03
+    inc = 0.01
     syncErrThresh = 0.03
     vrepZdelta = 1.08220972
 
@@ -184,21 +184,21 @@ def map_joystick(joystick):
         if orient == True:
             # print(temp[3:])
             direction = [x*500*math.pi/180 for x in direction]
-            inc = tf.transformations.quaternion_from_euler(direction[0],direction[1],direction[2])
+            inc = tf.transformations.quaternion_from_euler(direction[1],direction[0],direction[2])
             print('Inc: ', inc)
             resp = vrepScriptFunc.call('get_pose@Baxter_leftArm_target',1,[],[],[],'')
             curr = np.array(resp.outputFloats[3:])
-            curr_euler = tf.transformations.euler_from_quaternion(curr)
-            print('Current Euler: ',curr_euler)
-            print('Current Quarternion: ', curr)
-            mag = math.sqrt(np.sum(curr**2))
-            print('Current magnitude: ', mag)
+            # curr_euler = tf.transformations.euler_from_quaternion(curr)
+            # print('Current Euler: ',curr_euler)
+            # print('Current Quarternion: ', curr)
+            # mag = math.sqrt(np.sum(curr**2))
+            # print('Current magnitude: ', mag)
             new_quar = tf.transformations.quaternion_multiply(inc,curr)
-            print('New quaternion: ',new_quar)
-            mag = math.sqrt(np.sum(new_quar**2))
-            print('New magnitude: ', mag)
-            new_euler = tf.transformations.euler_from_quaternion(new_quar)
-            print('New Euler: ',new_euler)
+            # print('New quaternion: ',new_quar)
+            # mag = math.sqrt(np.sum(new_quar**2))
+            # print('New magnitude: ', mag)
+            # new_euler = tf.transformations.euler_from_quaternion(new_quar)
+            # print('New Euler: ',new_euler)
             direction = [0]*3 + new_quar.tolist()
             # print direction
 
