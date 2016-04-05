@@ -180,14 +180,14 @@ def map_joystick(joystick):
             ns = right_ns
 
         # desired_p = np.array(limb.endpoint_pose()['position']+limb.endpoint_pose()['orientation'])
+        resp = vrepScriptFunc.call('get_pose@Baxter_leftArm_target',1,[],[],[],'')
+        curr = np.array(resp.outputFloats[3:])
 
         if orient == True:
             # print(temp[3:])
             direction = [x*500*math.pi/180 for x in direction]
             inc = tf.transformations.quaternion_from_euler(direction[1],direction[0],direction[2])
             print('Inc: ', inc)
-            resp = vrepScriptFunc.call('get_pose@Baxter_leftArm_target',1,[],[],[],'')
-            curr = np.array(resp.outputFloats[3:])
             # curr_euler = tf.transformations.euler_from_quaternion(curr)
             # print('Current Euler: ',curr_euler)
             # print('Current Quarternion: ', curr)
@@ -203,7 +203,7 @@ def map_joystick(joystick):
             # print direction
 
         else:
-            direction = direction+zeros
+            direction = direction+curr.tolist()
 
         # print('Current: ', temp)
         direction = np.array(direction)
