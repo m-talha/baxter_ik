@@ -109,7 +109,7 @@ def map_keyboard():
         current_p = np.array(limb.endpoint_pose()['position']+limb.endpoint_pose()['orientation']) 
         direction = np.array(direction)
         desired_p = current_p + direction
-        ik_command.service_request(iksvc, desired_p, side)
+        ik_command.service_request(iksvc, desired_p, side, False)
 
     zeros = [0]*4
     inc = 0.1
