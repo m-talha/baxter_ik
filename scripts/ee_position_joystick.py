@@ -80,8 +80,11 @@ def map_joystick(joystick):
     bup = joystick.button_up
     ori = lambda v: orient if v=='up' else not orient
     zeros = [0]*4
-    inc = 0.03
-    syncErrThresh = 0.01
+    inc = 0.01
+    syncErrThresh = 0.03
+    syncErrFactor = 5
+    syncErrCount = 0
+    idleInput = True
     vrepZdelta = 1.08220972
 
     #These are from PyKDL and are needed for the Jacobian
@@ -108,6 +111,7 @@ def map_joystick(joystick):
     vrepScriptFunc = rospy.ServiceProxy('vrep/simRosCallScriptFunction', simRosCallScriptFunction)
 
     def syncPos(limb,jntSrvCall):
+        print('Synchronising pose...')
         while (True):
             # Set initial joint position in V-rep
             curr_jnts = np.array([limb.joint_angles()[name] for name in limb.joint_names()])
@@ -116,12 +120,14 @@ def map_joystick(joystick):
             resp = jntSrvCall.call('get_jnt_pos@Baxter_leftArm_target',1,[],[],[],'')
             err = math.fabs(np.linalg.norm(np.array(resp.outputFloats)-curr_jnts))
             print 'Error: ',err
-            print 'V-rep Joints: ',resp.outputFloats
+            vrep_deg = rad_to_deg(np.array(resp.outputFloats))
+            print 'V-rep Joints: ',vrep_deg
             print '---------------------------------------------------------------------------------'
             curr_deg = rad_to_deg(curr_jnts)
             print 'Actual joints: ', curr_jnts
             print '---------------------------------------------------------------------------------'
             if err < abs(syncErrThresh):
+                print('Pose synchronised')
                 break
 
     def command_jacobian(side, direction):
@@ -295,12 +301,13 @@ def map_joystick(joystick):
     print("Press Ctrl-C to stop. ")
     while not rospy.is_shutdown():
         temp = current_p
+        idleInput = True
         for (test, cmd, doc) in bindings:
             if test[0](*test[1]):
                 if cmd[0] == pos_to_ori:
                     orient = cmd[0](*cmd[1])
                 elif cmd[0] == command_ik:
-                    # current_p = cmd[0](*cmd[1])
+                    idleInput = False
                     temp = cmd[0](*cmd[1])
                 else:
                     cmd[0](*cmd[1])
@@ -329,6 +336,24 @@ def map_joystick(joystick):
             # Get Baxter joints
             curr_jnts = np.array([left.joint_angles()[name] for name in left.joint_names()])
 
+        # if err > syncErrThresh*syncErrFactor: # or syncErrCount > 4:
+        #     print('Resynchronising....')
+        #     syncPos(left, vrepScriptFunc)
+        #     syncErrCount = 0
+        # elif err > syncErrThresh:
+        #     if idleInput == True:
+        #         print('Incrementing sync error')
+        #         syncErrCount += 1
+        #     else:
+        #         print('Resetting sync error')
+        #         syncErrCount = 0
+        #
+        #     print('Sync error count: ',syncErrCount)
+        #     print('Moving to position...')
+        #     # Wrap and send joint positions to Baxter
+        #     # limb_joints = dict(zip(left._joint_names['left'], resp.outputFloats))
+        #     # left.set_joint_positions(limb_joints)
+        #     current_p = np.array(left.endpoint_pose()['position']+left.endpoint_pose()['orientation'])
 
 
 
