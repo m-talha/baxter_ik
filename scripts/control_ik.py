@@ -133,10 +133,12 @@ def print_js_bindings(bindings_list):
 class RobotArm:
 
     def __init__(self,vrepScriptFunc):
-        self.vrepScriptFunc = vrepScriptFunc
+        self.tf = tf.TransformListener()
         self.left = baxter_interface.Limb('left')
         self.grip_left = baxter_interface.Gripper('left', CHECK_VERSION)
         self.orient = False
+        self.ee_mode = False
+        self.vrepScriptFunc = vrepScriptFunc
         self.currPoseL = self.temp = np.array(self.left.endpoint_pose()['position']+self.left.endpoint_pose()['orientation'])
 
     def syncPos(self, side):
@@ -158,7 +160,6 @@ class RobotArm:
 
         return err
 
-
     def updPos(self,side):
         if side == 'left':
             limb = self.left
@@ -177,40 +178,95 @@ class RobotArm:
         else:
             limb = self.right
 
-        # desired_p = np.array(limb.endpoint_pose()['position']+limb.endpoint_pose()['orientation'])
-        resp = self.vrepScriptFunc.call('get_pose@Baxter_leftArm_target',1,[],[],[],'')
-        curr = np.array(resp.outputFloats[3:])
 
-        print('Orient now: ',self.orient)
-        if self.orient == True:
-            # print(temp[3:])
-            direction = [x*500*math.pi/180 for x in direction]
-            inc = tf.transformations.quaternion_from_euler(direction[1],direction[0],direction[2])
-            print('Inc: ', inc)
-            # curr_euler = tf.transformations.euler_from_quaternion(curr)
-            # print('Current Euler: ',curr_euler)
-            # print('Current Quarternion: ', curr)
-            # mag = math.sqrt(np.sum(curr**2))
-            # print('Current magnitude: ', mag)
-            new_quar = tf.transformations.quaternion_multiply(inc,curr)
-            # print('New quaternion: ',new_quar)
-            # mag = math.sqrt(np.sum(new_quar**2))
-            # print('New magnitude: ', mag)
-            # new_euler = tf.transformations.euler_from_quaternion(new_quar)
-            # print('New Euler: ',new_euler)
-            direction = [0]*3 + new_quar.tolist()
-            # print direction
+        if self.ee_mode == True:
+            resp = self.vrepScriptFunc.call('get_pose_ee@Baxter_leftArm_target',1,[],[],[],'')
+            currV = np.array(resp.outputFloats)
+            curr_ang = currV[3:]
+
+            # print('V-rep pose: ', currV)
+
+            t = self.tf.getLatestCommonTime("/left_gripper_base", "/world")
+            position, quaternion = self.tf.lookupTransform("/left_gripper_base", "/world", t)
+            currB = np.array(position).tolist() + np.array(quaternion).tolist()
+
+            # print('Baxter pose: ', currB)
+
+            diff = currB-currV
+            # print('Difference :', diff)
+
+            resp = self.vrepScriptFunc.call('get_target_ee@Baxter_leftArm_target',1,[],[],[],'')
+            currV = np.array(resp.outputFloats)
+            curr_ang = currV[3:]
+            actV = currV # + diff
+
+            # Transform from quaternion to Euler
+            actV = actV.reshape((7,1))
+            act_eul = np.zeros((6,1))
+            quaternion_to_euler(actV,act_eul)
+
+            # Get inverse rotation matrix from quaternion
+            rot = tf.transformations.quaternion_matrix(actV[3:7].flatten().tolist())
+            rot_inv = tf.transformations.inverse_matrix(rot)
+            print('R_inv partial:', rot_inv[0:3,0:3])
+
+            # Compute the direction desired
+            if self.orient == True:
+                direction = [x*500*math.pi/180 for x in direction]
+                inc = tf.transformations.quaternion_from_euler(direction[1],direction[0],direction[2])
+                print('Inc: ', inc)
+                new_quar = tf.transformations.quaternion_multiply(inc,curr_ang)
+                direction = [0]*3 + new_quar.tolist()
+
+            else:
+                direction = direction+curr_ang.tolist()
+
+            # Convert direction from world to ee frame- currently just position
+            # dir_ee = np.dot(rot_inv[0:3,0:3], direction[0:3])
+            # print('Direction_EE: ', dir_ee)
+            # direction[0:3] = dir_ee
+            # print('Direction: ', direction)
+
+            # Send the new direction to V-rep
+            resp =self.vrepScriptFunc.call('set_target_ee@Baxter_leftArm_target',1,[],direction,[],'')
+            desired_p = self.temp + direction
+            self.temp = desired_p
+
 
         else:
-            direction = direction+curr.tolist()
+            # desired_p = np.array(limb.endpoint_pose()['position']+limb.endpoint_pose()['orientation'])
+            resp = self.vrepScriptFunc.call('get_pose@Baxter_leftArm_target',1,[],[],[],'')
+            curr_ang = np.array(resp.outputFloats[3:])
 
-        print('Current: ', self.temp)
-        direction = np.array(direction)
-        # print('Direction: ', direction)
-        resp =self.vrepScriptFunc.call('set_pose@Baxter_leftArm_target',1,[],direction,[],'')
-        desired_p = self.temp + direction
-        self.temp = desired_p
-        # print('Desired: ', desired_p)
+            if self.orient == True:
+                # print(temp[3:])
+                direction = [x*500*math.pi/180 for x in direction]
+                inc = tf.transformations.quaternion_from_euler(direction[1],direction[0],direction[2])
+                print('Inc: ', inc)
+                # curr_euler = tf.transformations.euler_from_quaternion(curr)
+                # print('Current Euler: ',curr_euler)
+                # print('Current Quarternion: ', curr)
+                # mag = math.sqrt(np.sum(curr**2))
+                # print('Current magnitude: ', mag)
+                new_quar = tf.transformations.quaternion_multiply(inc,curr_ang)
+                # print('New quaternion: ',new_quar)
+                # mag = math.sqrt(np.sum(new_quar**2))
+                # print('New magnitude: ', mag)
+                # new_euler = tf.transformations.euler_from_quaternion(new_quar)
+                # print('New Euler: ',new_euler)
+                direction = [0]*3 + new_quar.tolist()
+                # print direction
+
+            else:
+                direction = direction+curr_ang.tolist()
+
+            print('Current: ', self.temp)
+            direction = np.array(direction)
+            # print('Direction: ', direction)
+            resp =self.vrepScriptFunc.call('set_pose@Baxter_leftArm_target',1,[],direction,[],'')
+            desired_p = self.temp + direction
+            self.temp = desired_p
+            # print('Desired: ', desired_p)
 
     def grip_l_open(self):
         self.grip_left.open()
@@ -223,8 +279,12 @@ class RobotArm:
     def pos_to_ori(self,s):
         self.orient = s=='down'
 
+    def world_to_ee(self,s):
+        self.ee_mode = s=='ee'
+
     def reset_pos(self):
         outputFloats = [-0.523599,-1.22173,0.0,2.44346,0.0,0.523599,0.0]
+        # outputFloats = [0,0,0.0,0,0.0,0,0.0]
         limb_joints = dict(zip(self.left._joint_names['left'], outputFloats))
         self.left.move_to_joint_positions(limb_joints)
 
@@ -236,6 +296,8 @@ def move_to_start_pos(robot,syncErrThresh):
         err = robot.syncPos('left')
         if err < abs(syncErrThresh):
             break
+
+
     print('Pose synchronised. Control of arm enabled.')
 
 def run_control(joystick):
@@ -252,7 +314,7 @@ def run_control(joystick):
 
     zeros = [0]*4
     inc = 0.03
-    syncErrThresh = 0.02
+    syncErrThresh = 0.03
     vrepZdelta = 1.08220972
 
     # Service to call functions in V-rep (e.g. set/get joint positions)
@@ -275,6 +337,10 @@ def run_control(joystick):
              (robot.pos_to_ori,['down']), "Switched to orientation"),
             ((bup, ['leftBumper']),
              (robot.pos_to_ori,['up']), "Switched to position"),
+            ((bdn, ['rightBumper']),
+             (robot.world_to_ee,['ee']), "Switched to tool frame"),
+            ((bup, ['rightBumper']),
+             (robot.world_to_ee,['world']), "Switched to world frame"),
             ((jlo, ['leftStickHorz']),
              (robot.command_ik, ['left', [0, -inc, 0]]), lambda: "left y dec "),
             ((jhi, ['leftStickHorz']),
@@ -297,6 +363,8 @@ def run_control(joystick):
     kb_b = {
         'o': (robot.pos_to_ori, ['down'], "Switched to orientation"),
         'p': (robot.pos_to_ori, ['up'], "Switched to position"),
+        'u': (robot.world_to_ee, ['ee'], "Switched to tool frame"),
+        'i': (robot.world_to_ee, ['world'], "Switched to world frame"),
         'w': (robot.command_ik, ['left', [inc, 0, 0]],  "increase left x"),
         's': (robot.command_ik, ['left', [-inc, 0, 0]], "decrease left x"),
         'a': (robot.command_ik, ['left', [0, inc, 0]],  "increase left y"),
@@ -352,6 +420,7 @@ def run_control(joystick):
 
     # Move to start position
     move_to_start_pos(robot,syncErrThresh)
+    vrepScriptFunc.call('set_ik_mode@Baxter_leftArm_target',1,[],[],[],'')
 
     rate = rospy.Rate(100)
     # while loop
@@ -365,9 +434,10 @@ def run_control(joystick):
                 recording=True
                 #catch Esc or ctrl-c
                 if c in ['\x1b', '\x03']:
-                    done_recording=True
                     rospy.signal_shutdown("Example finished.")
 
+                if c == '\r':
+                    done_recording=True
 
                 # Keyboard control
                 if c in kb_b:
@@ -376,9 +446,14 @@ def run_control(joystick):
                     print("command: %s" % (cmd[2],))
 
         else:
+            c = baxter_external_devices.getch()
+            if c == '\r':
+                done_recording=True
+
             # Joystick control
             for (test, cmd, doc) in bindings:
                 if test[0](*test[1]):
+                    recording=True
                     cmd[0](*cmd[1])
                     if callable(doc):
                         print(doc())
@@ -401,7 +476,7 @@ def run_control(joystick):
             norm = np.linalg.norm(curr_jnts)
             err = math.fabs(np.linalg.norm(np.array(resp.outputFloats)-curr_jnts))
             err = err/norm
-            print('Error: ',err)
+            # print('Error: ',err)
 
             # limb_joints = dict(zip(robot.left._joint_names['left'], resp.outputFloats))
             # robot.left.set_joint_positions(limb_joints)
