@@ -7,7 +7,6 @@ project(baxter_ik)
 find_package(catkin REQUIRED COMPONENTS
   rosout
   rospy
-  vrep_common
 )
 
 ## System dependencies are found with CMake's conventions

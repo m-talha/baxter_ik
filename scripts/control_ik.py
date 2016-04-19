@@ -136,6 +136,7 @@ class RobotArm:
         self.tf = tf.TransformListener()
         self.left = baxter_interface.Limb('left')
         self.grip_left = baxter_interface.Gripper('left', CHECK_VERSION)
+        self.grip_closed = False
         self.orient = False
         self.ee_mode = False
         self.vrepScriptFunc = vrepScriptFunc
@@ -186,8 +187,8 @@ class RobotArm:
 
             # print('V-rep pose: ', currV)
 
-            t = self.tf.getLatestCommonTime("/left_gripper_base", "/world")
-            position, quaternion = self.tf.lookupTransform("/left_gripper_base", "/world", t)
+            t = self.tf.getLatestCommonTime("/left_gripper_base", "/base")
+            position, quaternion = self.tf.lookupTransform("/left_gripper_base", "/base", t)
             currB = np.array(position).tolist() + np.array(quaternion).tolist()
 
             # print('Baxter pose: ', currB)
@@ -260,8 +261,8 @@ class RobotArm:
             else:
                 direction = direction+curr_ang.tolist()
 
-            print('Current: ', self.temp)
-            direction = np.array(direction)
+            # print('Current: ', self.temp)
+            dirSection = np.array(direction)
             # print('Direction: ', direction)
             resp =self.vrepScriptFunc.call('set_pose@Baxter_leftArm_target',1,[],direction,[],'')
             desired_p = self.temp + direction
@@ -273,8 +274,14 @@ class RobotArm:
         self.vrepScriptFunc.call('grip@BaxterGripper',1,[0],[],[],'')
 
     def grip_l_close(self):
-        self.grip_left.close()
-        self.vrepScriptFunc.call('grip@BaxterGripper',1,[1],[],[],'')
+        if self.grip_closed == False:
+            self.grip_left.close()
+            self.vrepScriptFunc.call('grip@BaxterGripper',1,[1],[],[],'')
+            self.grip_closed = True
+        else:
+            self.grip_left.open()
+            self.vrepScriptFunc.call('grip@BaxterGripper', 1, [0], [], [], '')
+            self.grip_closed = False
 
     def pos_to_ori(self,s):
         self.orient = s=='down'
@@ -300,6 +307,12 @@ def move_to_start_pos(robot,syncErrThresh):
 
     print('Pose synchronised. Control of arm enabled.')
 
+def inc_delta(inc,delta):
+    inc+= delta
+    print('New inc: ', inc)
+
+    return inc
+
 def run_control(joystick):
     # Initialise parameters
     kbOnly = True if joystick==None else False
@@ -314,6 +327,7 @@ def run_control(joystick):
 
     zeros = [0]*4
     inc = 0.03
+    delta = 0.005
     syncErrThresh = 0.03
     vrepZdelta = 1.08220972
 
@@ -326,21 +340,23 @@ def run_control(joystick):
 
     # Get appropriate bindings
     kb_b= js_b = False
-    if kbOnly == False:
-        js_b = []
+
+    def gen_js_bindings(inc):
         bindings = (
+            ((bdn, ['btnUp']),
+             (robot.grip_l_close, []), "left gripper"),
+            ((bdn, ['rightTrigger']),
+             (inc_delta, [inc, delta]), "Speed increased"),
             ((bdn, ['leftTrigger']),
-             (robot.grip_l_close,  []), "left gripper close"),
-            ((bup, ['leftTrigger']),
-             (robot.grip_l_open,   []), "left gripper open"),
+             (inc_delta, [inc, -delta]), "Speed decreased"),
             ((bdn, ['leftBumper']),
-             (robot.pos_to_ori,['down']), "Switched to orientation"),
+             (robot.pos_to_ori, ['down']), "Switched to orientation"),
             ((bup, ['leftBumper']),
-             (robot.pos_to_ori,['up']), "Switched to position"),
+             (robot.pos_to_ori, ['up']), "Switched to position"),
             ((bdn, ['rightBumper']),
-             (robot.world_to_ee,['ee']), "Switched to tool frame"),
+             (robot.world_to_ee, ['ee']), "Switched to tool frame"),
             ((bup, ['rightBumper']),
-             (robot.world_to_ee,['world']), "Switched to world frame"),
+             (robot.world_to_ee, ['world']), "Switched to world frame"),
             ((jlo, ['leftStickHorz']),
              (robot.command_ik, ['left', [0, -inc, 0]]), lambda: "left y dec "),
             ((jhi, ['leftStickHorz']),
@@ -357,24 +373,34 @@ def run_control(joystick):
              (print_js_bindings, [js_b]), "help"),
             ((bdn, ['function2']),
              (print_js_bindings, [js_b]), "help"),
-            )
+        )
+
+        return bindings
+    def gen_kb_bindings(inc):
+        bindings = {
+            'o': (robot.pos_to_ori, ['down'], "Switched to orientation"),
+            'p': (robot.pos_to_ori, ['up'], "Switched to position"),
+            'u': (robot.world_to_ee, ['ee'], "Switched to tool frame"),
+            'i': (robot.world_to_ee, ['world'], "Switched to world frame"),
+            'w': (robot.command_ik, ['left', [inc, 0, 0]], "increase left x"),
+            's': (robot.command_ik, ['left', [-inc, 0, 0]], "decrease left x"),
+            'a': (robot.command_ik, ['left', [0, inc, 0]], "increase left y"),
+            'd': (robot.command_ik, ['left', [0, -inc, 0]], "decrease left y"),
+            'q': (robot.command_ik, ['left', [0, 0, inc]], "increase left z"),
+            'e': (robot.command_ik, ['left', [0, 0, -inc]], "decrease left z"),
+            'k': (robot.grip_l_close, [], "left: gripper close"),
+            'l': (robot.grip_l_open, [], "left: gripper open"),
+            # 'c': (grip_right.calibrate, [], "left: gripper calibrate")
+        }
+
+        return bindings
+
+    if kbOnly == False:
+        js_b = []
+        bindings = gen_js_bindings(inc)
         js_b.append(bindings)
 
-    kb_b = {
-        'o': (robot.pos_to_ori, ['down'], "Switched to orientation"),
-        'p': (robot.pos_to_ori, ['up'], "Switched to position"),
-        'u': (robot.world_to_ee, ['ee'], "Switched to tool frame"),
-        'i': (robot.world_to_ee, ['world'], "Switched to world frame"),
-        'w': (robot.command_ik, ['left', [inc, 0, 0]],  "increase left x"),
-        's': (robot.command_ik, ['left', [-inc, 0, 0]], "decrease left x"),
-        'a': (robot.command_ik, ['left', [0, inc, 0]],  "increase left y"),
-        'd': (robot.command_ik, ['left', [0, -inc, 0]], "decrease left y"),
-        'q': (robot.command_ik, ['left', [0, 0, inc]],  "increase left z"),
-        'e': (robot.command_ik, ['left', [0, 0, -inc]], "decrease left z"),
-        'k': (robot.grip_l_close, [], "left: gripper close"),
-        'l': (robot.grip_l_open, [], "left: gripper open"),
-        # 'c': (grip_right.calibrate, [], "left: gripper calibrate")
-    }
+    kb_b = gen_kb_bindings(inc)
 
     # Print bindings
     if kbOnly == False:
@@ -454,7 +480,12 @@ def run_control(joystick):
             for (test, cmd, doc) in bindings:
                 if test[0](*test[1]):
                     recording=True
-                    cmd[0](*cmd[1])
+                    if cmd[0] == inc_delta:
+                        inc = cmd[0](*cmd[1])
+                        bindings = gen_js_bindings(inc)
+                        js_b[0] = bindings
+                    else:
+                        cmd[0](*cmd[1])
                     if callable(doc):
                         print(doc())
                     else:
