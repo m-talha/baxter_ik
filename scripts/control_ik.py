@@ -14,9 +14,11 @@ import rospy
 import struct
 import tf
 import thread
+import os, subprocess, signal
 
 import baxter_interface
 import baxter_external_devices
+import joystick as jstick
 
 from baxter_interface import CHECK_VERSION
 
@@ -213,7 +215,7 @@ class RobotArm:
 
             # Compute the direction desired
             if self.orient == True:
-                direction = [x*500*math.pi/180 for x in direction]
+                direction = [x*50*math.pi/180 for x in direction]
                 inc = tf.transformations.quaternion_from_euler(direction[1],direction[0],direction[2])
                 print('Inc: ', inc)
                 new_quar = tf.transformations.quaternion_multiply(inc,curr_ang)
@@ -278,16 +280,34 @@ class RobotArm:
             self.grip_left.close()
             self.vrepScriptFunc.call('grip@BaxterGripper',1,[1],[],[],'')
             self.grip_closed = True
+            print('Gripper closed')
         else:
             self.grip_left.open()
             self.vrepScriptFunc.call('grip@BaxterGripper', 1, [0], [], [], '')
             self.grip_closed = False
+            print('Gripper open')
 
-    def pos_to_ori(self,s):
-        self.orient = s=='down'
+    def pos_to_ori(self,s=None):
+        if s:
+            self.orient = s=='down'
+        else:
+            self.orient = not self.orient
 
-    def world_to_ee(self,s):
-        self.ee_mode = s=='ee'
+        if self.orient == True:
+            print('In orientation mode')
+        else:
+            print('In position mode')
+
+    def world_to_ee(self,s=None):
+        if s:
+            self.ee_mode = s=='ee'
+        else:
+            self.ee_mode = not self.ee_mode
+
+        if self.ee_mode == True:
+            print('In tool frame')
+        else:
+            print('In world frame')
 
     def reset_pos(self):
         outputFloats = [-0.523599,-1.22173,0.0,2.44346,0.0,0.523599,0.0]
@@ -307,9 +327,19 @@ def move_to_start_pos(robot,syncErrThresh):
 
     print('Pose synchronised. Control of arm enabled.')
 
-def inc_delta(inc,delta):
-    inc+= delta
-    print('New inc: ', inc)
+def inc_delta(inc, delta, incU, incL):
+    print('Delta: ', delta)
+    if delta > 0:
+        if inc+delta <= incU:
+            inc+= delta
+        else:
+            inc = incU
+    if delta < 0:
+        if inc+delta >= incL:
+            inc+= delta
+        else:
+            inc = incL
+    print('New speed: ', inc)
 
     return inc
 
@@ -326,8 +356,11 @@ def run_control(joystick):
         bup = joystick.button_up
 
     zeros = [0]*4
-    inc = 0.03
-    delta = 0.005
+    initial_inc = 0.03
+    inc = initial_inc
+    delta = 0.01
+    incU = 0.05
+    incL = 0.01
     syncErrThresh = 0.03
     vrepZdelta = 1.08220972
 
@@ -345,10 +378,10 @@ def run_control(joystick):
         bindings = (
             ((bdn, ['btnUp']),
              (robot.grip_l_close, []), "left gripper"),
-            ((bdn, ['rightTrigger']),
-             (inc_delta, [inc, delta]), "Speed increased"),
-            ((bdn, ['leftTrigger']),
-             (inc_delta, [inc, -delta]), "Speed decreased"),
+            ((jhi, ['rightTrigger']),
+             (inc_delta, [inc, delta, incU, incL]), "Speed increased"),
+            ((jhi, ['leftTrigger']),
+             (inc_delta, [inc, -delta, incU, incL]), "Speed decreased"),
             ((bdn, ['leftBumper']),
              (robot.pos_to_ori, ['down']), "Switched to orientation"),
             ((bup, ['leftBumper']),
@@ -378,19 +411,21 @@ def run_control(joystick):
         return bindings
     def gen_kb_bindings(inc):
         bindings = {
-            'o': (robot.pos_to_ori, ['down'], "Switched to orientation"),
-            'p': (robot.pos_to_ori, ['up'], "Switched to position"),
-            'u': (robot.world_to_ee, ['ee'], "Switched to tool frame"),
-            'i': (robot.world_to_ee, ['world'], "Switched to world frame"),
+            '9': (inc_delta, [inc, delta, incU, incL], "Speed increased"),
+            '0': (inc_delta, [inc, -delta, incU, incL], "Speed decreased"),
+            'i': (robot.pos_to_ori, [], "Switch position/orientation"),
+            # 'p': (robot.pos_to_ori, ['up'], "Switched to position"),
+            'o': (robot.world_to_ee, [], "Switch world/tool frame"),
+            # 'i': (robot.world_to_ee, ['world'], "Switched to world frame"),
             'w': (robot.command_ik, ['left', [inc, 0, 0]], "increase left x"),
             's': (robot.command_ik, ['left', [-inc, 0, 0]], "decrease left x"),
             'a': (robot.command_ik, ['left', [0, inc, 0]], "increase left y"),
             'd': (robot.command_ik, ['left', [0, -inc, 0]], "decrease left y"),
             'q': (robot.command_ik, ['left', [0, 0, inc]], "increase left z"),
             'e': (robot.command_ik, ['left', [0, 0, -inc]], "decrease left z"),
-            'k': (robot.grip_l_close, [], "left: gripper close"),
-            'l': (robot.grip_l_open, [], "left: gripper open"),
-            # 'c': (grip_right.calibrate, [], "left: gripper calibrate")
+            'p': (robot.grip_l_close, [], "Gripper open/close"),
+            # 'l': (robot.grip_l_open, [], "left: gripper open"),
+            # 'c': (grip_left.calibrate, [], "left: gripper calibrate")
         }
 
         return bindings
@@ -422,23 +457,45 @@ def run_control(joystick):
     done_recording=False
     def record_data(filename):
         # Subscribe to endpoint state
-        _cartesian_state_sub = rospy.Subscriber(
-                '/robot/limb/left/endpoint_state',
-                EndpointState,
-                on_endpoint_states,
-                endpoint_state,
-                queue_size=1,
-                tcp_nodelay=True)
+        # _cartesian_state_sub = rospy.Subscriber(
+        #         '/robot/limb/left/endpoint_state',
+        #         EndpointState,
+        #         on_endpoint_states,
+        #         endpoint_state,
+        #         queue_size=1,
+        #         tcp_nodelay=True)
 
-        bag = rosbag.Bag(filename, 'w')
+        # bag = rosbag.Bag(filename, 'w')
 
-        while not done_recording:
-            if recording==True:
+        def terminate_process_and_children(s):
+            list_cmd = subprocess.Popen("rosnode list", shell=True, stdout=subprocess.PIPE)
+            list_output = list_cmd.stdout.read()
+            retcode = list_cmd.wait()
+            assert retcode == 0, "List command returned %d" % retcode
+            for str in list_output.split("\n"):
+                if (str.startswith(s)):
+                    os.system("rosnode kill " + str)
+
+        # while not done_recording:
+            # if recording==True:
                 # print('Endpoint actual: ',endpoint_state)
-                bag.write('endpoint_state',endpoint_state)
+                # bag.write('endpoint_state',endpoint_state)
+
+        rt = rospy.Rate(100)
+        while not recording:
+            rt.sleep()
+
+        p = subprocess.Popen('rosbag record -j -O test.bag /robot/limb/left/endpoint_state '
+                                     '/cameras/head_camera/image',stdin=subprocess.PIPE,shell=True,
+                                     cwd='/home/talha/test_ws/src/baxter_ik/scripts/')
+        # print 'Finishing recording'
+        # bag.close()
+        while not done_recording:
+            rt.sleep()
 
         print 'Finishing recording'
-        bag.close()
+        terminate_process_and_children("/record")
+
 
     thread.start_new_thread(record_data, ('test.bag',))
 
@@ -460,6 +517,7 @@ def run_control(joystick):
                 recording=True
                 #catch Esc or ctrl-c
                 if c in ['\x1b', '\x03']:
+                    # terminate_process_and_children(p)
                     rospy.signal_shutdown("Example finished.")
 
                 if c == '\r':
@@ -468,7 +526,14 @@ def run_control(joystick):
                 # Keyboard control
                 if c in kb_b:
                     cmd = kb_b[c]
-                    cmd[0](*cmd[1])
+                    if cmd[0] == inc_delta:
+                        inc = cmd[0](*cmd[1])
+                        kb_b = gen_kb_bindings(inc)
+                    elif cmd[0] == robot.pos_to_ori:
+                        kb_b = gen_kb_bindings(initial_inc)
+                        cmd[0](*cmd[1])
+                    else:
+                        cmd[0](*cmd[1])
                     print("command: %s" % (cmd[2],))
 
         else:
@@ -484,6 +549,10 @@ def run_control(joystick):
                         inc = cmd[0](*cmd[1])
                         bindings = gen_js_bindings(inc)
                         js_b[0] = bindings
+                    elif cmd[0] == robot.pos_to_ori:
+                        bindings = gen_js_bindings(initial_inc)
+                        js_b[0] = bindings
+                        cmd[0](*cmd[1])
                     else:
                         cmd[0](*cmd[1])
                     if callable(doc):
@@ -565,7 +634,7 @@ key bindings.
 
     joystick = None
     if args.joystick == 'xbox':
-        joystick = baxter_external_devices.joystick.XboxController()
+        joystick = jstick.XboxController()
     elif args.joystick == 'logitech':
         joystick = baxter_external_devices.joystick.LogitechController()
     elif args.joystick == 'ps3':
