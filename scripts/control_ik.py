@@ -155,12 +155,12 @@ class RobotArm:
         resp = self.vrepScriptFunc.call('set_jnt_pos@Baxter_leftArm_target',1,[],curr_jnts,[],'')
         resp = self.vrepScriptFunc.call('get_jnt_pos@Baxter_leftArm_target',1,[],[],[],'')
         err = math.fabs(np.linalg.norm(np.array(resp.outputFloats)-curr_jnts))
-        print 'Error: ',err
-        print 'V-rep Joints: ',resp.outputFloats
-        print '---------------------------------------------------------------------------------'
+        # print 'Error: ',err
+        # print 'V-rep Joints: ',resp.outputFloats
+        # print '---------------------------------------------------------------------------------'
         curr_deg = rad_to_deg(curr_jnts)
-        print 'Actual joints: ', curr_jnts
-        print '---------------------------------------------------------------------------------'
+        # print 'Actual joints: ', curr_jnts
+        # print '---------------------------------------------------------------------------------'
 
         return err
 
@@ -212,41 +212,38 @@ class RobotArm:
             # Get inverse rotation matrix from quaternion
             rot = tf.transformations.quaternion_matrix(actV[3:7].flatten().tolist())
             rot_inv = tf.transformations.inverse_matrix(rot)
-            print('R_inv partial:', rot_inv[0:3,0:3])
+            # print('R_inv partial:', rot_inv[0:3,0:3])
+
+            new_dir = copy.deepcopy(direction)
 
             # Compute the direction desired
             if self.orient == True:
-                direction = [x*50*math.pi/180 for x in direction]
-                inc = tf.transformations.quaternion_from_euler(direction[1],direction[0],direction[2])
-                print('Inc: ', inc)
+                new_dir = [x * 500 * math.pi / 180 for x in direction]
+                inc = tf.transformations.quaternion_from_euler(new_dir[1], new_dir[0], new_dir[2])
+                # print('Inc: ', inc)
                 new_quar = tf.transformations.quaternion_multiply(inc,curr_ang)
-                direction = [0]*3 + new_quar.tolist()
+                new_dir = [0] * 3 + new_quar.tolist()
 
             else:
-                direction = direction+curr_ang.tolist()
-
-            # Convert direction from world to ee frame- currently just position
-            # dir_ee = np.dot(rot_inv[0:3,0:3], direction[0:3])
-            # print('Direction_EE: ', dir_ee)
-            # direction[0:3] = dir_ee
-            # print('Direction: ', direction)
+                new_dir[0] = -new_dir[0]
+                new_dir[2] = -new_dir[2]
+                new_dir = new_dir + curr_ang.tolist()
 
             # Send the new direction to V-rep
-            resp =self.vrepScriptFunc.call('set_target_ee@Baxter_leftArm_target',1,[],direction,[],'')
-            desired_p = self.temp + direction
-            self.temp = desired_p
+            resp =self.vrepScriptFunc.call('set_target_ee@Baxter_leftArm_target', 1, [], new_dir, [], '')
 
 
         else:
             # desired_p = np.array(limb.endpoint_pose()['position']+limb.endpoint_pose()['orientation'])
             resp = self.vrepScriptFunc.call('get_pose@Baxter_leftArm_target',1,[],[],[],'')
             curr_ang = np.array(resp.outputFloats[3:])
+            new_dir = copy.deepcopy(direction)
 
             if self.orient == True:
                 # print(temp[3:])
-                direction = [x*500*math.pi/180 for x in direction]
-                inc = tf.transformations.quaternion_from_euler(direction[1],direction[0],direction[2])
-                print('Inc: ', inc)
+                new_dir = [x * 500 * math.pi / 180 for x in new_dir]
+                inc = tf.transformations.quaternion_from_euler(new_dir[1], new_dir[0], new_dir[2])
+                # print('Inc: ', inc)
                 # curr_euler = tf.transformations.euler_from_quaternion(curr)
                 # print('Current Euler: ',curr_euler)
                 # print('Current Quarternion: ', curr)
@@ -258,17 +255,17 @@ class RobotArm:
                 # print('New magnitude: ', mag)
                 # new_euler = tf.transformations.euler_from_quaternion(new_quar)
                 # print('New Euler: ',new_euler)
-                direction = [0]*3 + new_quar.tolist()
+                new_dir = [0] * 3 + new_quar.tolist()
                 # print direction
 
             else:
-                direction = direction+curr_ang.tolist()
+                new_dir = new_dir + curr_ang.tolist()
 
             # print('Current: ', self.temp)
-            dirSection = np.array(direction)
+            new_dir = np.array(new_dir)
             # print('Direction: ', direction)
-            resp =self.vrepScriptFunc.call('set_pose@Baxter_leftArm_target',1,[],direction,[],'')
-            desired_p = self.temp + direction
+            resp =self.vrepScriptFunc.call('set_pose@Baxter_leftArm_target', 1, [], new_dir, [], '')
+            desired_p = self.temp + new_dir
             self.temp = desired_p
             # print('Desired: ', desired_p)
 
@@ -332,18 +329,18 @@ def move_to_start_pos(robot,syncErrThresh):
     print('Pose synchronised. Control of arm enabled.')
 
 def inc_delta(inc, delta, incU, incL):
-    print('Delta: ', delta)
+    # print('Delta: ', delta)
     if delta > 0:
-        if inc+delta <= incU:
-            inc+= delta
-        else:
-            inc = incU
+        # if inc+delta <= incU:
+        #     inc+= delta
+        # else:
+        inc = incU
     if delta < 0:
-        if inc+delta >= incL:
-            inc+= delta
-        else:
-            inc = incL
-    print('New speed: ', inc)
+        # if inc+delta >= incL:
+        #     inc+= delta
+        # else:
+        inc = incL
+    # print('New speed: ', inc)
 
     return inc
 
@@ -363,9 +360,9 @@ def run_control(joystick):
     initial_inc = 0.03
     inc = initial_inc
     delta = 0.01
-    incU = 0.05
+    incU = 0.02
     incL = 0.01
-    syncErrThresh = 0.03
+    syncErrThresh = 0.003
     vrepZdelta = 1.08220972
 
     # Service to call functions in V-rep (e.g. set/get joint positions)
@@ -418,9 +415,7 @@ def run_control(joystick):
             '9': (inc_delta, [inc, delta, incU, incL], "Speed increased"),
             '0': (inc_delta, [inc, -delta, incU, incL], "Speed decreased"),
             'i': (robot.pos_to_ori, [], "Switch position/orientation"),
-            # 'p': (robot.pos_to_ori, ['up'], "Switched to position"),
-            'o': (robot.world_to_ee, [], "Switch world/tool frame"),
-            # 'i': (robot.world_to_ee, ['world'], "Switched to world frame"),
+            # 'o': (robot.world_to_ee, [], "Switch world/tool frame"),
             'w': (robot.command_ik, ['left', [inc, 0, 0]], "increase left x"),
             's': (robot.command_ik, ['left', [-inc, 0, 0]], "decrease left x"),
             'a': (robot.command_ik, ['left', [0, inc, 0]], "increase left y"),
@@ -489,9 +484,11 @@ def run_control(joystick):
         while not recording:
             rt.sleep()
 
-        p = subprocess.Popen('rosbag record -j -O test.bag /robot/limb/left/endpoint_state '
-                                     '/cameras/head_camera/image',stdin=subprocess.PIPE,shell=True,
-                                     cwd='/home/talha/test_ws/src/baxter_ik/scripts/')
+        p = subprocess.Popen('rosbag record -j -O 5.bag /robot/limb/left/endpoint_state '
+                             '/camera1/rgb/image_color /camera2/rgb/image_color ',
+                             # '/cameras/left_hand_camera/image',
+                             stdin=subprocess.PIPE,shell=True, cwd='/home/domenico/talha_ws/src/baxter_ik/data/id_7/')
+                                # /home/talha/test_ws/src/baxter_ik/scripts/
         # print 'Finishing recording'
         # bag.close()
         while not done_recording:
@@ -503,11 +500,13 @@ def run_control(joystick):
 
     # thread.start_new_thread(record_data, ('test.bag',))
 
-
+    then = rospy.get_rostime()
 
     # Move to start position
     move_to_start_pos(robot,syncErrThresh)
     vrepScriptFunc.call('set_ik_mode@Baxter_leftArm_target',1,[],[],[],'')
+
+    prevPosVrep = None
 
     rate = rospy.Rate(100)
     # while loop
@@ -517,7 +516,7 @@ def run_control(joystick):
         if kbOnly == True:
             c = baxter_external_devices.getch(-1)
             if c:
-                print('Pressed: ',c)
+                # print('Pressed: ',c)
                 recording=True
                 #catch Esc or ctrl-c
                 if c in ['\x1b', '\x03']:
@@ -534,19 +533,16 @@ def run_control(joystick):
                         inc = cmd[0](*cmd[1])
                         kb_b = gen_kb_bindings(inc)
                     elif cmd[0] == robot.pos_to_ori:
-                        kb_b = gen_kb_bindings(initial_inc)
+                        # kb_b = gen_kb_bindings(initial_inc)
                         cmd[0](*cmd[1])
                     else:
                         cmd[0](*cmd[1])
-                    print("command: %s" % (cmd[2],))
+                    # print("command: %s" % (cmd[2],))
 
         else:
-            c = baxter_external_devices.getch()
-            if c == '\r':
-                done_recording=True
-
             # Joystick control
             for (test, cmd, doc) in bindings:
+                then = rospy.get_rostime()
                 if test[0](*test[1]):
                     recording=True
                     if cmd[0] == inc_delta:
@@ -554,8 +550,8 @@ def run_control(joystick):
                         bindings = gen_js_bindings(inc)
                         js_b[0] = bindings
                     elif cmd[0] == robot.pos_to_ori:
-                        bindings = gen_js_bindings(initial_inc)
-                        js_b[0] = bindings
+                        # bindings = gen_js_bindings(initial_inc)
+                        # js_b[0] = bindings
                         cmd[0](*cmd[1])
                     else:
                         cmd[0](*cmd[1])
@@ -568,10 +564,19 @@ def run_control(joystick):
         resp = vrepScriptFunc.call('ikSuccess@Baxter_leftArm_target',1,[],[],[],'')
         # print 'Ik Success: ', resp.outputInts
 
+
         # If successful, receive & send joints to Baxter
         if resp.outputInts[0] == -1:
             # Get resulting joint positions from V-rep
             resp = vrepScriptFunc.call('get_jnt_pos@Baxter_leftArm_target',1,[],[],[],'')
+
+
+            if prevPosVrep is None:
+                prevPosVrep = [0,0,0,0,0,0,0]
+            err2 = np.linalg.norm(np.array(resp.outputFloats) - np.array(prevPosVrep))
+            # print(resp.outputFloats)
+            # print(prevPosVrep)
+            prevPosVrep = copy.deepcopy(resp.outputFloats)
 
             # Get Baxter joints
             curr_jnts = np.array([robot.left.joint_angles()[name] for name in robot.left.joint_names()])
@@ -581,22 +586,41 @@ def run_control(joystick):
             err = math.fabs(np.linalg.norm(np.array(resp.outputFloats)-curr_jnts))
             err = err/norm
             # print('Error: ',err)
+            # print('ErrorVrep: ', err2)
+
+
+
+
+
+
 
             # limb_joints = dict(zip(robot.left._joint_names['left'], resp.outputFloats))
             # robot.left.set_joint_positions(limb_joints)
-            # syncPos(left, vrepScriptFunc)
+            # robot.syncPos('left')
 
             if err > abs(syncErrThresh):
-                # Wrap and send joint positions to Baxter
-                limb_joints = dict(zip(robot.left._joint_names['left'], resp.outputFloats))
-                robot.left.set_joint_positions(limb_joints)
+                if err2 > 0.0001:
+                    # print('Position updated')
+                    # Wrap and send joint positions to Baxter
+                    limb_joints = dict(zip(robot.left._joint_names['left'], resp.outputFloats))
+                    diff = rospy.get_rostime() - then
+                    # print ('Time taken:', diff.to_sec())
+                    robot.left.set_joint_positions(limb_joints)
+
+                    curr_jnts = np.array([robot.left.joint_angles()[name] for name in robot.left.joint_names()])
+                    jnt_err = np.zeros((7, 1))
+                    for x in range(curr_jnts.size):
+                        jnt_err[x] = curr_jnts[x] - resp.outputFloats[x]
+
+                    # print('Joint difference: ', jnt_err.tolist())
+
 
                 # print('V-rep Joints: ',limb_joints)
             # resp = vrepScriptFunc.call('get_pose@Baxter_leftArm_target',1,[],[],[],'')
             # print 'V-rep pose: ',resp.outputFloats
             # print('---------------------------------------------------------------------------------'/0)
             # print 'Finish pose: ',current_p
-            # print('Actual joints: ', left.joint_angles())
+            #     print('Actual joints: ', robot.left.joint_angles())
             # print('---------------------------------------------------------------------------------')
 
         rate.sleep()
@@ -638,7 +662,7 @@ key bindings.
 
     joystick = None
     if args.joystick == 'xbox':
-        joystick = jstick.XboxController()
+        joystick = jstick.XboxController(deadband=0.2)
     elif args.joystick == 'logitech':
         joystick = baxter_external_devices.joystick.LogitechController()
     elif args.joystick == 'ps3':
