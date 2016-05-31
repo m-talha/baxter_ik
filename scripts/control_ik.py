@@ -137,6 +137,7 @@ class RobotArm:
     def __init__(self,vrepScriptFunc):
         self.tf = tf.TransformListener()
         self.left = baxter_interface.Limb('left')
+        self.right = baxter_interface.Limb('right')
         self.grip_left = baxter_interface.Gripper('left', CHECK_VERSION)
         self.grip_closed = False
         self.orient = False
@@ -311,9 +312,12 @@ class RobotArm:
 
     def reset_pos(self):
         outputFloats = [-0.523599,-1.22173,0.0,2.44346,0.0,0.523599,0.0]
+        outputFloatsRight = [-0.523599,-1.22173,0.0,2.44346,0.0,0.523599,0.0]
         # outputFloats = [0,0,0.0,0,0.0,0,0.0]
         limb_joints = dict(zip(self.left._joint_names['left'], outputFloats))
+        limb_joints_r = dict(zip(self.right._joint_names['right'], outputFloatsRight))
         self.left.move_to_joint_positions(limb_joints)
+        self.right.move_to_joint_positions(limb_joints_r)
 
 def move_to_start_pos(robot,syncErrThresh):
     print('Moving to start position and synchronising pose...')
@@ -497,7 +501,7 @@ def run_control(joystick):
         terminate_process_and_children("/record")
 
 
-    thread.start_new_thread(record_data, ('test.bag',))
+    # thread.start_new_thread(record_data, ('test.bag',))
 
 
 
